@@ -1,7 +1,7 @@
 extends Node3D
 
 # GameBox 3D Runner - Android-safe real 3D prototype.
-# Phase 5A.4: procedural low-poly polish pass with cleaner UI, environment, obstacles and feedback.
+# Phase 5A.5: auto CC0 asset pipeline + runtime model scanner with procedural fallback.
 
 const LANES = [-1.65, 0.0, 1.65]
 const PLAYER_Z = 3.2
@@ -61,6 +61,8 @@ var last_lane_index = 1
 var screen_shake_timer = 0.0
 var feedback_label
 var feedback_timer = 0.0
+var asset_catalog = {}
+var asset_mode = "built_in_fallback"
 
 func _ready():
 	randomize()
@@ -70,6 +72,7 @@ func _ready():
 	load_config()
 	load_best_score()
 	create_materials()
+	scan_asset_catalog()
 	create_world()
 	create_player()
 	create_camera()
@@ -137,6 +140,112 @@ func save_best_score():
 	var save = ConfigFile.new()
 	save.set_value("scores", "best", best_score)
 	save.save("user://runner_score.cfg")
+
+func scan_asset_catalog():
+	asset_catalog = {
+		"road": [],
+		"barrier": [],
+		"cone": [],
+		"crate": [],
+		"lamp": [],
+		"sign": [],
+		"building": [],
+		"environment": [],
+		"character": []
+	}
+	var roots = [
+		"res://assets/vendor/kenney_3d_road_tiles",
+		"res://assets/imported",
+		"res://assets/models"
+	]
+	for root_path in roots:
+		scan_asset_dir(root_path)
+	var total = 0
+	for key in asset_catalog.keys():
+		total += asset_catalog[key].size()
+	asset_mode = "auto_cc0_assets" if total > 0 else "built_in_fallback"
+	print("GameBox asset mode: ", asset_mode, " models=", total)
+
+func scan_asset_dir(dir_path):
+	var dir = DirAccess.open(dir_path)
+	if dir == null:
+		return
+	dir.list_dir_begin()
+	while true:
+		var file_name = dir.get_next()
+		if file_name == "":
+			break
+		if file_name.begins_with("."):
+			continue
+		var path = dir_path + "/" + file_name
+		if dir.current_is_dir():
+			scan_asset_dir(path)
+		else:
+			var ext = file_name.get_extension().to_lower()
+			if ext in ["glb", "gltf", "obj", "tscn", "scn"]:
+				categorize_asset(path)
+	dir.list_dir_end()
+
+func categorize_asset(path):
+	var lower = path.to_lower()
+	if lower.find("character") >= 0 or lower.find("runner") >= 0 or lower.find("person") >= 0 or lower.find("robot") >= 0:
+		register_asset("character", path)
+	if lower.find("road") >= 0 or lower.find("street") >= 0 or lower.find("asphalt") >= 0:
+		register_asset("road", path)
+	if lower.find("barrier") >= 0 or lower.find("fence") >= 0 or lower.find("block") >= 0:
+		register_asset("barrier", path)
+	if lower.find("cone") >= 0:
+		register_asset("cone", path)
+	if lower.find("crate") >= 0 or lower.find("box") >= 0:
+		register_asset("crate", path)
+	if lower.find("lamp") >= 0 or lower.find("light") >= 0:
+		register_asset("lamp", path)
+	if lower.find("sign") >= 0:
+		register_asset("sign", path)
+	if lower.find("building") >= 0 or lower.find("house") >= 0 or lower.find("tower") >= 0:
+		register_asset("building", path)
+	if lower.find("tree") >= 0 or lower.find("rock") >= 0 or lower.find("pillar") >= 0 or lower.find("prop") >= 0:
+		register_asset("environment", path)
+
+func register_asset(key, path):
+	if not asset_catalog.has(key):
+		asset_catalog[key] = []
+	if not asset_catalog[key].has(path):
+		asset_catalog[key].append(path)
+
+func has_asset(key):
+	return asset_catalog.has(key) and asset_catalog[key].size() > 0
+
+func instantiate_asset_model(key, parent, pos := Vector3.ZERO, scale_value := Vector3.ONE, rot_degrees := Vector3.ZERO):
+	if not has_asset(key):
+		return null
+	var path = asset_catalog[key].pick_random()
+	var res = load(path)
+	if res == null:
+		return null
+	var node = null
+	if res is PackedScene:
+		node = res.instantiate()
+	elif res is Mesh:
+		node = MeshInstance3D.new()
+		node.mesh = res
+	else:
+		return null
+	node.name = "Asset_" + key
+	node.position = pos
+	node.scale = scale_value
+	node.rotation_degrees = rot_degrees
+	parent.add_child(node)
+	return node
+
+func create_asset_prop(key, x, z, scale_min := 0.65, scale_max := 1.15):
+	var group = create_prop_group("AssetProp_" + key, x, z)
+	var s = randf_range(scale_min, scale_max)
+	var model = instantiate_asset_model(key, group, Vector3.ZERO, Vector3(s, s, s), Vector3(0, randf_range(-12, 12), 0))
+	if model == null:
+		group.queue_free()
+		return null
+	return group
 
 func create_materials():
 	mats["road"] = make_mat(Color(0.020, 0.024, 0.034))
@@ -279,19 +388,34 @@ func create_environment_props():
 		var right_x = 5.9 + randf() * 1.2
 		match key:
 			"jungle":
-				create_tree(left_x, z)
-				create_tree(right_x, z + 2.2)
+				if create_asset_prop("environment", left_x, z, 0.55, 1.05) == null:
+					create_tree(left_x, z)
+				if create_asset_prop("environment", right_x, z + 2.2, 0.55, 1.05) == null:
+					create_tree(right_x, z + 2.2)
 			"desert":
-				create_pillar(left_x, z)
-				create_pillar(right_x, z + 1.7)
+				if create_asset_prop("environment", left_x, z, 0.70, 1.20) == null:
+					create_pillar(left_x, z)
+				if create_asset_prop("environment", right_x, z + 1.7, 0.70, 1.20) == null:
+					create_pillar(right_x, z + 1.7)
 			"snow":
-				create_rock(left_x, z, mats["env_snow"])
-				create_rock(right_x, z + 1.3, mats["env_snow"])
+				if create_asset_prop("environment", left_x, z, 0.65, 1.15) == null:
+					create_rock(left_x, z, mats["env_snow"])
+				if create_asset_prop("environment", right_x, z + 1.3, 0.65, 1.15) == null:
+					create_rock(right_x, z + 1.3, mats["env_snow"])
 			"cyber":
 				create_neon_gate(z)
 			_:
-				create_building(left_x, z)
-				create_building(right_x, z + 2.0)
+				if has_asset("building") and randf() > 0.25:
+					create_asset_prop("building", left_x, z, 0.55, 1.15)
+				else:
+					create_building(left_x, z)
+				if has_asset("building") and randf() > 0.25:
+					create_asset_prop("building", right_x, z + 2.0, 0.55, 1.15)
+				else:
+					create_building(right_x, z + 2.0)
+		if has_asset("lamp") and i % 3 == 0:
+			create_asset_prop("lamp", -3.95, z + 0.9, 0.55, 0.90)
+			create_asset_prop("lamp", 3.95, z + 2.4, 0.55, 0.90)
 
 func create_prop_group(name, x, z):
 	var group = Node3D.new()
@@ -626,6 +750,8 @@ func update_camera(delta):
 func update_hud():
 	var score = int(distance_score)
 	hud_label.text = "%s\nScore: %d   Best: %d   Coins: %d\nLane: %d   Speed: %s   Difficulty: %s" % [str(config.get("gameName", "3D Runner")), score, best_score, coins, lane_index + 1, str(config.get("speed", 3)), str(config.get("difficulty", 2))]
+	if asset_mode == "auto_cc0_assets":
+		hud_label.text += "\nAssets: auto CC0 pack"
 	var buffs = []
 	if shield_timer > 0.0:
 		buffs.append("Shield %ds" % int(ceil(shield_timer)))
@@ -672,6 +798,20 @@ func item_height(kind):
 func create_item_node(kind):
 	var root = Node3D.new()
 	root.name = "Item_" + kind
+	var asset_key = ""
+	match kind:
+		"cone": asset_key = "cone"
+		"barrier": asset_key = "barrier"
+		"block": asset_key = "crate"
+		"gate": asset_key = "barrier"
+		_: asset_key = ""
+	if asset_key != "" and has_asset(asset_key):
+		var asset_scale = Vector3(0.95, 0.95, 0.95)
+		if kind == "gate":
+			asset_scale = Vector3(1.15, 1.15, 1.15)
+		var model = instantiate_asset_model(asset_key, root, Vector3.ZERO, asset_scale, Vector3.ZERO)
+		if model != null:
+			return root
 	match kind:
 		"coin":
 			add_cylinder("Coin", Vector3.ZERO, 0.22, 0.08, mats["coin"], root).rotation_degrees.x = 90

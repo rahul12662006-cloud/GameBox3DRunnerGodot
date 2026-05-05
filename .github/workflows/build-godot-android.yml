@@ -47,6 +47,13 @@ jobs:
           export/android/java_sdk_path = "${JAVA_HOME}"
           SETTINGS
 
+
+      - name: Install optional CC0 game assets
+        run: |
+          set -e
+          bash tools/install_cc0_assets.sh || true
+          find assets -maxdepth 3 -type f | sed 's#^#asset: #' | head -80
+
       - name: Export Android debug APK
         run: |
           set -e

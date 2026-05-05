@@ -47,21 +47,22 @@ rm -rf "${UNPACK_DIR}"
 mkdir -p "${UNPACK_DIR}"
 unzip -q -o "${ZIP_PATH}" -d "${UNPACK_DIR}"
 
-# Copy only Godot-friendly model files. We keep the file count bounded so import/export remains fast.
+# Copy only Godot-friendly self-contained model files by default.
+# We intentionally skip .obj here because many OBJ files reference separate .mtl files;
+# missing MTL files caused noisy Godot import errors and the game fell back to procedural blocks.
 count=0
 while IFS= read -r -d '' file; do
   base="$(basename "$file")"
-  # Prefer obvious game-useful pieces first.
   lower="$(printf '%s' "$base" | tr '[:upper:]' '[:lower:]')"
   if [[ "$lower" == *"road"* || "$lower" == *"barrier"* || "$lower" == *"cone"* || "$lower" == *"lamp"* || "$lower" == *"sign"* || "$lower" == *"street"* || "$lower" == *"light"* ]]; then
     safe_name="$(printf '%s' "$base" | tr ' ' '_' | tr -cd '[:alnum:]_.-')"
     cp -f "$file" "${VENDOR_DIR}/${safe_name}"
     count=$((count + 1))
   fi
-  if [[ "$count" -ge 90 ]]; then
+  if [[ "$count" -ge 40 ]]; then
     break
   fi
-done < <(find "${UNPACK_DIR}" -type f \( -iname '*.glb' -o -iname '*.gltf' -o -iname '*.obj' \) -print0)
+done < <(find "${UNPACK_DIR}" -type f \( -iname '*.glb' -o -iname '*.gltf' \) -print0)
 
 printf '{\n  "installed": true,\n  "source": "kenney_3d_road_tiles",\n  "modelCount": %d\n}\n' "$count" > "${MANIFEST}"
 

@@ -24,3 +24,7 @@ Manual asset option:
 3. Re-run the APK workflow.
 
 The runtime scans these folders and uses matching models for barriers, cones, crates, lamps, buildings, and environment props when available.
+
+## Phase 5A.6
+
+Added bundled GLB starter assets and disabled OBJ-only auto-import to avoid missing `.mtl` import errors. The runner now prefers local GLB assets from `assets/models/gamebox_lowpoly/` before falling back to procedural shapes.

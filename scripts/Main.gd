@@ -327,21 +327,21 @@ func create_world():
 		_: e.background_color = Color(0.018, 0.022, 0.040)
 	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	e.ambient_light_color = Color(0.40, 0.42, 0.55)
-	e.ambient_light_energy = 0.65
+	e.ambient_light_energy = 0.92
 	e.fog_enabled = true
-	e.fog_density = 0.028
+	e.fog_density = 0.013
 	e.fog_light_color = e.background_color.lightened(0.20)
 	env.environment = e
 	add_child(env)
 	RenderingServer.set_default_clear_color(e.background_color)
 
 	var sun = DirectionalLight3D.new()
-	sun.light_energy = 2.65
+	sun.light_energy = 3.20
 	sun.rotation_degrees = Vector3(-58, -22, 0)
 	add_child(sun)
 	var fill = OmniLight3D.new()
 	fill.position = Vector3(0, 4.2, 4.2)
-	fill.light_energy = 1.85
+	fill.light_energy = 2.35
 	fill.omni_range = 24.0
 	add_child(fill)
 	var rim = OmniLight3D.new()
@@ -468,7 +468,23 @@ func create_player():
 	player_root.position = Vector3(LANES[lane_index], BASE_Y, PLAYER_Z)
 	player_body = Node3D.new()
 	player_root.add_child(player_body)
-	add_box("PlayerShadow", Vector3(0, -0.43, 0.10), Vector3(0.62, 0.025, 0.38), mats["shadow"], player_body)
+	add_box("PlayerShadow", Vector3(0, -0.43, 0.10), Vector3(0.66, 0.025, 0.42), mats["shadow"], player_body)
+
+	# Phase 5A.6: prefer bundled GLB character assets. Fallback remains code-only.
+	var imported_player = instantiate_asset_model("character", player_body, Vector3(0, -0.34, -0.04), Vector3(0.62, 0.62, 0.62), Vector3(0, 180, 0))
+	if imported_player != null:
+		player_head = null
+		player_arm_l = null
+		player_arm_r = null
+		player_leg_l = null
+		player_leg_r = null
+		player_trail_nodes.clear()
+		for i in range(3):
+			var trail = add_box("RunTrail", Vector3(0, 0.05, 0.35 + float(i) * 0.20), Vector3(0.06, 0.028, 0.20), mats["road_side"], player_body)
+			trail.visible = false
+			player_trail_nodes.append(trail)
+		return
+
 	add_capsule("Torso", Vector3(0, 0.38, 0), 0.20, 0.74, mats["player"], player_body)
 	add_box("ChestPlate", Vector3(0, 0.42, -0.10), Vector3(0.34, 0.25, 0.07), mats["player_light"], player_body)
 	add_box("Backpack", Vector3(0, 0.40, 0.16), Vector3(0.30, 0.38, 0.08), mats["player_dark"], player_body)
@@ -508,7 +524,7 @@ func create_game_ui():
 	hud_label.anchor_right = 0.96
 	hud_label.anchor_top = 0.025
 	hud_label.anchor_bottom = 0.135
-	hud_label.add_theme_font_size_override("font_size", 18)
+	hud_label.add_theme_font_size_override("font_size", 17)
 	hud_label.add_theme_color_override("font_color", Color(0.94, 0.92, 1.0))
 	root.add_child(hud_label)
 
@@ -527,16 +543,16 @@ func create_game_ui():
 	pause_button.pressed.connect(toggle_pause)
 	root.add_child(pause_button)
 
-	var left_btn = make_button("◀", 0.04, 0.865, 0.23, 0.935)
+	var left_btn = make_button("◀", 0.05, 0.885, 0.20, 0.945)
 	left_btn.pressed.connect(lane_left)
 	root.add_child(left_btn)
-	var right_btn = make_button("▶", 0.77, 0.865, 0.96, 0.935)
+	var right_btn = make_button("▶", 0.80, 0.885, 0.95, 0.945)
 	right_btn.pressed.connect(lane_right)
 	root.add_child(right_btn)
-	var jump_btn = make_button("JUMP", 0.31, 0.865, 0.48, 0.935)
+	var jump_btn = make_button("JUMP", 0.33, 0.890, 0.48, 0.945)
 	jump_btn.pressed.connect(jump)
 	root.add_child(jump_btn)
-	var slide_btn = make_button("SLIDE", 0.52, 0.865, 0.69, 0.935)
+	var slide_btn = make_button("SLIDE", 0.52, 0.890, 0.67, 0.945)
 	slide_btn.pressed.connect(slide)
 	root.add_child(slide_btn)
 
@@ -751,7 +767,7 @@ func update_hud():
 	var score = int(distance_score)
 	hud_label.text = "%s\nScore: %d   Best: %d   Coins: %d\nLane: %d   Speed: %s   Difficulty: %s" % [str(config.get("gameName", "3D Runner")), score, best_score, coins, lane_index + 1, str(config.get("speed", 3)), str(config.get("difficulty", 2))]
 	if asset_mode == "auto_cc0_assets":
-		hud_label.text += "\nAssets: auto CC0 pack"
+		hud_label.text += "\nAssets: GameBox low-poly pack"
 	var buffs = []
 	if shield_timer > 0.0:
 		buffs.append("Shield %ds" % int(ceil(shield_timer)))

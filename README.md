@@ -1,11 +1,11 @@
-# GameBox 3D Runner - Phase 5A.2 Visual/Camera Fix
+# GameBox 3D Runner - Phase 5A.3 Motion Feel Patch
 
-This patch replaces the emergency fallback-looking 3D runner with a cleaner procedural real-3D runner pass:
-- better camera angle and object scale
-- smaller, cleaner mobile UI controls
-- wider road and better lane proportions
-- improved city/desert/jungle/cyber/snow prop spacing
-- smaller obstacles and player model proportions
-- less clutter near the bottom of the screen
+This patch improves the Godot 3D runner motion feel without generating images or assets.
 
-Still uses procedural low-poly objects only. Premium visuals will require real GLB models/assets later.
+Changes:
+- Adds visible runner body bob, arm swing, leg swing, and lane-change lean.
+- Adds camera bob/follow/FOV motion so the runner feels more alive.
+- Adds scrolling road dash cues and side environment parallax.
+- Keeps the Godot real-3D template/config system intact.
+
+Apply over the current GameBox3DRunnerGodot repo.

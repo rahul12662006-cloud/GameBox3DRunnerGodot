@@ -1,7 +1,7 @@
 extends Node3D
 
 # GameBox 3D Runner - Android-safe real 3D prototype.
-# Phase 5A.2: camera, scale, UI and procedural low-poly art pass for a cleaner real-3D runner.
+# Phase 5A.3: runner motion-feel pass with character animation, camera motion and scrolling world cues.
 
 const LANES = [-1.65, 0.0, 1.65]
 const PLAYER_Z = 3.2
@@ -48,6 +48,14 @@ var best_score = 0
 var is_game_over = false
 var is_paused = false
 var items = []
+var road_dash_nodes = []
+var env_motion_nodes = []
+var player_arm_l
+var player_arm_r
+var player_leg_l
+var player_leg_r
+var run_cycle = 0.0
+var last_lane_index = 1
 
 func _ready():
 	randomize()
@@ -71,6 +79,7 @@ func _process(delta):
 	update_powerups(delta)
 	update_spawning(delta)
 	update_items(delta)
+	update_world_motion(delta)
 	update_camera(delta)
 	distance_score += delta * game_speed() * 8.0
 	update_hud()
@@ -207,6 +216,7 @@ func create_world():
 	create_environment_props()
 
 func create_road():
+	road_dash_nodes.clear()
 	add_box("GroundPlane", Vector3(0, -0.06, -32), Vector3(18.0, 0.05, 60.0), make_mat(Color(0.012, 0.014, 0.025)), world_root)
 	add_box("Road", Vector3(0, 0, -36), Vector3(5.1, 0.08, 46.0), mats["road"], world_root)
 	add_box("LeftRail", Vector3(-3.35, 0.14, -36), Vector3(0.12, 0.12, 46.0), mats["road_side"], world_root)
@@ -214,9 +224,15 @@ func create_road():
 	for x in [-0.83, 0.83]:
 		add_box("Lane", Vector3(x, 0.13, -36), Vector3(0.028, 0.035, 46.0), mats["lane"], world_root)
 	for z in range(-80, 8, 5):
-		add_box("Dash", Vector3(0, 0.17, float(z)), Vector3(0.12, 0.035, 0.40), mats["lane"], world_root)
+		var dash = add_box("Dash", Vector3(0, 0.17, float(z)), Vector3(0.12, 0.035, 0.40), mats["lane"], world_root)
+		road_dash_nodes.append(dash)
+	for side_x in [-2.25, 2.25]:
+		for z in range(-82, 8, 7):
+			var side_dash = add_box("SpeedDash", Vector3(side_x, 0.18, float(z)), Vector3(0.055, 0.035, 0.80), mats["road_side"], world_root)
+			road_dash_nodes.append(side_dash)
 
 func create_environment_props():
+	env_motion_nodes.clear()
 	var key = map_key()
 	for i in range(26):
 		var z = -78.0 + float(i) * 4.5
@@ -238,27 +254,40 @@ func create_environment_props():
 				create_building(left_x, z)
 				create_building(right_x, z + 2.0)
 
+func create_prop_group(name, x, z):
+	var group = Node3D.new()
+	group.name = name
+	group.position = Vector3(x, 0, z)
+	world_root.add_child(group)
+	env_motion_nodes.append(group)
+	return group
+
 func create_building(x, z):
+	var group = create_prop_group("BuildingGroup", x, z)
 	var h = randf_range(1.6, 5.2)
 	var w = randf_range(0.55, 1.05)
-	add_box("Building", Vector3(x, h * 0.5, z), Vector3(w, h, randf_range(0.65, 1.05)), mats["env_dark"], world_root)
+	add_box("Building", Vector3(0, h * 0.5, 0), Vector3(w, h, randf_range(0.65, 1.05)), mats["env_dark"], group)
 	if randf() > 0.45:
-		add_box("WindowGlow", Vector3(x, h * 0.62, z - 0.56), Vector3(w * 0.42, 0.08, 0.018), mats["road_side"], world_root)
+		add_box("WindowGlow", Vector3(0, h * 0.62, -0.56), Vector3(w * 0.42, 0.08, 0.018), mats["road_side"], group)
 
 func create_tree(x, z):
-	add_cylinder("Trunk", Vector3(x, 0.55, z), 0.16, 1.1, make_mat(Color(0.25, 0.12, 0.05)), world_root)
-	add_sphere("Leaves", Vector3(x, 1.35, z), Vector3(0.75, 0.62, 0.75), mats["env_green"], world_root)
+	var group = create_prop_group("TreeGroup", x, z)
+	add_cylinder("Trunk", Vector3(0, 0.55, 0), 0.16, 1.1, make_mat(Color(0.25, 0.12, 0.05)), group)
+	add_sphere("Leaves", Vector3(0, 1.35, 0), Vector3(0.75, 0.62, 0.75), mats["env_green"], group)
 
 func create_pillar(x, z):
-	add_cylinder("Pillar", Vector3(x, 1.1, z), 0.32, 2.2, mats["env_desert"], world_root)
+	var group = create_prop_group("PillarGroup", x, z)
+	add_cylinder("Pillar", Vector3(0, 1.1, 0), 0.32, 2.2, mats["env_desert"], group)
 
 func create_rock(x, z, mat):
-	add_sphere("Rock", Vector3(x, 0.35, z), Vector3(randf_range(0.55, 1.0), 0.35, randf_range(0.55, 1.0)), mat, world_root)
+	var group = create_prop_group("RockGroup", x, z)
+	add_sphere("Rock", Vector3(0, 0.35, 0), Vector3(randf_range(0.55, 1.0), 0.35, randf_range(0.55, 1.0)), mat, group)
 
 func create_neon_gate(z):
-	add_box("NeonL", Vector3(-5.0, 1.5, z), Vector3(0.08, 1.6, 0.08), mats["env_cyber"], world_root)
-	add_box("NeonR", Vector3(5.0, 1.5, z), Vector3(0.08, 1.6, 0.08), mats["env_cyber"], world_root)
-	add_box("NeonT", Vector3(0, 3.1, z), Vector3(5.1, 0.08, 0.08), mats["env_cyber"], world_root)
+	var group = create_prop_group("NeonGateGroup", 0, z)
+	add_box("NeonL", Vector3(-5.0, 1.5, 0), Vector3(0.08, 1.6, 0.08), mats["env_cyber"], group)
+	add_box("NeonR", Vector3(5.0, 1.5, 0), Vector3(0.08, 1.6, 0.08), mats["env_cyber"], group)
+	add_box("NeonT", Vector3(0, 3.1, 0), Vector3(5.1, 0.08, 0.08), mats["env_cyber"], group)
 
 func create_player():
 	player_root = Node3D.new()
@@ -271,10 +300,10 @@ func create_player():
 	add_capsule("Body", Vector3(0, 0.40, 0), 0.23, 0.78, mats["player"], player_body)
 	add_sphere("Head", Vector3(0, 0.98, 0), Vector3(0.24, 0.24, 0.24), mats["player"], player_body)
 	add_box("Chest", Vector3(0, 0.37, -0.05), Vector3(0.32, 0.32, 0.08), mats["player_dark"], player_body)
-	add_box("ArmL", Vector3(-0.28, 0.42, 0), Vector3(0.07, 0.36, 0.07), mats["player_dark"], player_body)
-	add_box("ArmR", Vector3(0.28, 0.42, 0), Vector3(0.07, 0.36, 0.07), mats["player_dark"], player_body)
-	add_box("LegL", Vector3(-0.12, -0.16, 0), Vector3(0.07, 0.32, 0.08), mats["player_dark"], player_body)
-	add_box("LegR", Vector3(0.12, -0.16, 0), Vector3(0.07, 0.32, 0.08), mats["player_dark"], player_body)
+	player_arm_l = add_box("ArmL", Vector3(-0.28, 0.42, 0), Vector3(0.07, 0.36, 0.07), mats["player_dark"], player_body)
+	player_arm_r = add_box("ArmR", Vector3(0.28, 0.42, 0), Vector3(0.07, 0.36, 0.07), mats["player_dark"], player_body)
+	player_leg_l = add_box("LegL", Vector3(-0.12, -0.16, 0), Vector3(0.07, 0.32, 0.08), mats["player_dark"], player_body)
+	player_leg_r = add_box("LegR", Vector3(0.12, -0.16, 0), Vector3(0.07, 0.32, 0.08), mats["player_dark"], player_body)
 
 func create_camera():
 	camera = Camera3D.new()
@@ -357,6 +386,8 @@ func reset_game():
 			item.node.queue_free()
 	items.clear()
 	lane_index = 1
+	last_lane_index = 1
+	run_cycle = 0.0
 	player_y = BASE_Y
 	vertical_velocity = 0.0
 	on_ground = true
@@ -382,7 +413,15 @@ func game_speed():
 
 func update_player(delta):
 	var target_x = LANES[lane_index]
+	var before_x = player_root.position.x
 	player_root.position.x = lerp(player_root.position.x, target_x, min(delta * 11.0, 1.0))
+	var lane_velocity = (player_root.position.x - before_x) / max(delta, 0.001)
+
+	if on_ground and slide_timer <= 0.0:
+		run_cycle += delta * game_speed() * 2.8
+	else:
+		run_cycle += delta * game_speed() * 1.25
+
 	if not on_ground:
 		vertical_velocity -= 18.0 * delta
 		player_y += vertical_velocity * delta
@@ -391,15 +430,37 @@ func update_player(delta):
 			vertical_velocity = 0.0
 			on_ground = true
 	player_root.position.y = player_y
+
+	var run_bob = 0.0
+	if on_ground and slide_timer <= 0.0:
+		run_bob = abs(sin(run_cycle)) * 0.075
+	player_root.position.z = PLAYER_Z + sin(run_cycle * 0.55) * 0.035
+
 	if slide_timer > 0.0:
 		slide_timer -= delta
 		player_body.scale.y = lerp(player_body.scale.y, 0.58, min(delta * 16.0, 1.0))
 		player_body.position.y = lerp(player_body.position.y, -0.18, min(delta * 16.0, 1.0))
 	else:
 		player_body.scale.y = lerp(player_body.scale.y, 1.0, min(delta * 14.0, 1.0))
-		player_body.position.y = lerp(player_body.position.y, 0.0, min(delta * 14.0, 1.0))
-	player_body.rotation_degrees.y = sin(Time.get_ticks_msec() * 0.009) * 5.0
-	player_body.rotation_degrees.x = -4.0 if slide_timer > 0.0 else 0.0
+		player_body.position.y = lerp(player_body.position.y, run_bob, min(delta * 14.0, 1.0))
+
+	var lane_lean = clamp(-lane_velocity * 5.0, -16.0, 16.0)
+	player_body.rotation_degrees.z = lerp(player_body.rotation_degrees.z, lane_lean, min(delta * 8.0, 1.0))
+	player_body.rotation_degrees.y = sin(run_cycle * 0.8) * 3.5
+	player_body.rotation_degrees.x = lerp(player_body.rotation_degrees.x, -13.0 if slide_timer > 0.0 else 0.0, min(delta * 9.0, 1.0))
+	animate_runner_limbs(delta)
+
+func animate_runner_limbs(delta):
+	if player_arm_l == null or player_leg_l == null:
+		return
+	var swing = sin(run_cycle)
+	var swing_back = sin(run_cycle + PI)
+	var arm_amount = 34.0 if slide_timer <= 0.0 else 10.0
+	var leg_amount = 28.0 if slide_timer <= 0.0 else 8.0
+	player_arm_l.rotation_degrees.x = lerp(player_arm_l.rotation_degrees.x, swing * arm_amount, min(delta * 12.0, 1.0))
+	player_arm_r.rotation_degrees.x = lerp(player_arm_r.rotation_degrees.x, swing_back * arm_amount, min(delta * 12.0, 1.0))
+	player_leg_l.rotation_degrees.x = lerp(player_leg_l.rotation_degrees.x, swing_back * leg_amount, min(delta * 12.0, 1.0))
+	player_leg_r.rotation_degrees.x = lerp(player_leg_r.rotation_degrees.x, swing * leg_amount, min(delta * 12.0, 1.0))
 
 func update_powerups(delta):
 	shield_timer = max(0.0, shield_timer - delta)
@@ -433,9 +494,26 @@ func update_items(delta):
 		if is_instance_valid(item.node):
 			item.node.queue_free()
 
+func update_world_motion(delta):
+	var move = game_speed() * delta
+	for dash in road_dash_nodes:
+		if is_instance_valid(dash):
+			dash.position.z += move * 1.55
+			if dash.position.z > 7.5:
+				dash.position.z -= 88.0
+	for prop in env_motion_nodes:
+		if is_instance_valid(prop):
+			prop.position.z += move * 0.72
+			if prop.position.z > 9.0:
+				prop.position.z -= 118.0
+
 func update_camera(delta):
-	camera.position.x = lerp(camera.position.x, player_root.position.x * 0.18, min(delta * 4.0, 1.0))
-	camera.look_at(Vector3(player_root.position.x * 0.10, 0.90, -20.0), Vector3.UP)
+	var speed_push = clamp((game_speed() - 9.0) * 0.035, 0.0, 0.32)
+	var bob = sin(run_cycle * 0.55) * 0.045
+	var target_pos = Vector3(player_root.position.x * 0.24, 4.45 + bob, 9.45 - speed_push)
+	camera.position = camera.position.lerp(target_pos, min(delta * 4.8, 1.0))
+	camera.fov = lerp(camera.fov, 72.0 + speed_push * 10.0, min(delta * 2.5, 1.0))
+	camera.look_at(Vector3(player_root.position.x * 0.10, 1.15 + bob, -18.5), Vector3.UP)
 
 func update_hud():
 	var score = int(distance_score)

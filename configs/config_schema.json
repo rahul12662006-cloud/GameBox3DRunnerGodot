@@ -1,0 +1,10 @@
+{
+  "gameName": "string",
+  "map": ["city", "jungle", "desert", "snow", "cyber"],
+  "character": ["runner_boy", "soldier_arcade", "robot_runner", "ninja", "alien"],
+  "speed": "1-5",
+  "difficulty": "1-5",
+  "coinsEnabled": "boolean",
+  "powerupsEnabled": "boolean",
+  "obstaclePack": ["mixed_starter_pack", "gates_ramps", "cars_cones", "rocks_barrels", "boxes_fences"]
+}

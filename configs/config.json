@@ -1,0 +1,10 @@
+{
+  "gameName": "GameBox 3D Runner",
+  "map": "city",
+  "character": "runner_boy",
+  "speed": 3,
+  "difficulty": 2,
+  "coinsEnabled": true,
+  "powerupsEnabled": true,
+  "obstaclePack": "mixed_starter_pack"
+}

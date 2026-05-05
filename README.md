@@ -62,3 +62,8 @@ If GitHub asks for password, use a GitHub personal access token, not your normal
 
 - This is a separate real-3D runtime prototype. It does not replace the Kotlin builder app yet.
 - Next step is Builder integration: GameBox Builder exports config, Godot reads it, GitHub Actions builds the final APK.
+
+
+## Android export fix notes
+
+This version keeps Godot Android export in non-Gradle template mode. Do not set `gradle_build/min_sdk` or `gradle_build/target_sdk` unless `gradle_build/use_gradle_build=true`; otherwise Godot will reject the export preset. The GitHub Actions workflow installs Android SDK platform 35 and Build Tools 35.0.1.

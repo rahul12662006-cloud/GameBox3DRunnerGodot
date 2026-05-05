@@ -1,13 +1,13 @@
 extends Node3D
 
 # GameBox 3D Runner - Android-safe real 3D prototype.
-# Phase 5A.3: runner motion-feel pass with character animation, camera motion and scrolling world cues.
+# Phase 5A.4: procedural low-poly polish pass with cleaner UI, environment, obstacles and feedback.
 
 const LANES = [-1.65, 0.0, 1.65]
 const PLAYER_Z = 3.2
-const SPAWN_Z = -82.0
-const DESPAWN_Z = 8.5
-const BASE_Y = 0.68
+const SPAWN_Z = -92.0
+const DESPAWN_Z = 9.5
+const BASE_Y = 0.64
 
 var config = {
 	"gameName": "GameBox 3D Runner",
@@ -54,8 +54,13 @@ var player_arm_l
 var player_arm_r
 var player_leg_l
 var player_leg_r
+var player_head
+var player_trail_nodes = []
 var run_cycle = 0.0
 var last_lane_index = 1
+var screen_shake_timer = 0.0
+var feedback_label
+var feedback_timer = 0.0
 
 func _ready():
 	randomize()
@@ -134,27 +139,40 @@ func save_best_score():
 	save.save("user://runner_score.cfg")
 
 func create_materials():
-	mats["road"] = make_mat(Color(0.025, 0.028, 0.040))
-	mats["road_side"] = make_mat(Color(0.32, 0.18, 0.72))
+	mats["road"] = make_mat(Color(0.020, 0.024, 0.034))
+	mats["road_panel"] = make_mat(Color(0.032, 0.038, 0.055))
+	mats["road_side"] = make_mat(Color(0.48, 0.25, 1.00), true, 0.45)
 	mats["lane"] = make_mat(Color(0.72, 0.76, 0.92))
+	mats["lane_glow"] = make_mat(Color(0.70, 0.58, 1.0), true, 0.35)
 	mats["player"] = make_mat(character_color())
-	mats["player_dark"] = make_mat(Color(0.15, 0.11, 0.28))
-	mats["coin"] = make_mat(Color(1.0, 0.78, 0.12))
-	mats["powerup"] = make_mat(Color(0.18, 0.88, 0.95))
-	mats["obstacle"] = make_mat(Color(1.0, 0.22, 0.30))
+	mats["player_light"] = make_mat(character_color().lightened(0.25), true, 0.10)
+	mats["player_dark"] = make_mat(Color(0.13, 0.10, 0.25))
+	mats["shoe"] = make_mat(Color(0.06, 0.055, 0.09))
+	mats["coin"] = make_mat(Color(1.0, 0.78, 0.12), true, 0.55)
+	mats["powerup"] = make_mat(Color(0.18, 0.88, 0.95), true, 0.70)
+	mats["obstacle"] = make_mat(Color(1.0, 0.20, 0.28))
+	mats["obstacle_dark"] = make_mat(Color(0.42, 0.06, 0.10))
 	mats["box"] = make_mat(Color(0.95, 0.42, 0.18))
-	mats["shadow"] = make_mat(Color(0.0, 0.0, 0.0, 0.45))
-	mats["env_dark"] = make_mat(Color(0.08, 0.08, 0.16))
+	mats["box_band"] = make_mat(Color(1.0, 0.78, 0.42))
+	mats["shadow"] = make_mat(Color(0.0, 0.0, 0.0, 0.48))
+	mats["env_dark"] = make_mat(Color(0.075, 0.075, 0.14))
+	mats["env_mid"] = make_mat(Color(0.11, 0.11, 0.20))
+	mats["window"] = make_mat(Color(0.48, 0.55, 0.88), true, 0.30)
 	mats["env_green"] = make_mat(Color(0.05, 0.32, 0.14))
 	mats["env_desert"] = make_mat(Color(0.52, 0.31, 0.14))
 	mats["env_snow"] = make_mat(Color(0.78, 0.88, 0.98))
-	mats["env_cyber"] = make_mat(Color(0.10, 0.72, 0.95))
+	mats["env_cyber"] = make_mat(Color(0.10, 0.72, 0.95), true, 0.90)
+	mats["lamp"] = make_mat(Color(1.0, 0.86, 0.52), true, 1.0)
 
-func make_mat(color):
+func make_mat(color, emission_enabled := false, emission_energy := 0.0):
 	var mat = StandardMaterial3D.new()
 	mat.albedo_color = color
-	mat.roughness = 0.55
-	mat.metallic = 0.02
+	mat.roughness = 0.62
+	mat.metallic = 0.0
+	if emission_enabled:
+		mat.emission_enabled = true
+		mat.emission = color
+		mat.emission_energy_multiplier = emission_energy
 	return mat
 
 func character_color():
@@ -193,49 +211,70 @@ func create_world():
 	var e = Environment.new()
 	e.background_mode = Environment.BG_COLOR
 	match map_key():
-		"jungle": e.background_color = Color(0.02, 0.12, 0.08)
-		"desert": e.background_color = Color(0.20, 0.12, 0.06)
-		"snow": e.background_color = Color(0.12, 0.16, 0.22)
-		"cyber": e.background_color = Color(0.02, 0.02, 0.08)
-		_: e.background_color = Color(0.035, 0.04, 0.07)
+		"jungle": e.background_color = Color(0.015, 0.09, 0.06)
+		"desert": e.background_color = Color(0.18, 0.10, 0.045)
+		"snow": e.background_color = Color(0.10, 0.14, 0.20)
+		"cyber": e.background_color = Color(0.008, 0.010, 0.035)
+		_: e.background_color = Color(0.018, 0.022, 0.040)
+	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	e.ambient_light_color = Color(0.40, 0.42, 0.55)
+	e.ambient_light_energy = 0.65
+	e.fog_enabled = true
+	e.fog_density = 0.028
+	e.fog_light_color = e.background_color.lightened(0.20)
 	env.environment = e
 	add_child(env)
 	RenderingServer.set_default_clear_color(e.background_color)
 
 	var sun = DirectionalLight3D.new()
-	sun.light_energy = 2.25
-	sun.rotation_degrees = Vector3(-54, -18, 0)
+	sun.light_energy = 2.65
+	sun.rotation_degrees = Vector3(-58, -22, 0)
 	add_child(sun)
 	var fill = OmniLight3D.new()
-	fill.position = Vector3(0, 4.5, 5.8)
-	fill.light_energy = 1.45
-	fill.omni_range = 22.0
+	fill.position = Vector3(0, 4.2, 4.2)
+	fill.light_energy = 1.85
+	fill.omni_range = 24.0
 	add_child(fill)
+	var rim = OmniLight3D.new()
+	rim.position = Vector3(0, 2.5, -12.0)
+	rim.light_energy = 1.05
+	rim.omni_range = 30.0
+	add_child(rim)
 
 	create_road()
 	create_environment_props()
 
 func create_road():
 	road_dash_nodes.clear()
-	add_box("GroundPlane", Vector3(0, -0.06, -32), Vector3(18.0, 0.05, 60.0), make_mat(Color(0.012, 0.014, 0.025)), world_root)
-	add_box("Road", Vector3(0, 0, -36), Vector3(5.1, 0.08, 46.0), mats["road"], world_root)
-	add_box("LeftRail", Vector3(-3.35, 0.14, -36), Vector3(0.12, 0.12, 46.0), mats["road_side"], world_root)
-	add_box("RightRail", Vector3(3.35, 0.14, -36), Vector3(0.12, 0.12, 46.0), mats["road_side"], world_root)
+	add_box("GroundPlane", Vector3(0, -0.09, -38), Vector3(20.0, 0.055, 74.0), make_mat(Color(0.009, 0.010, 0.018)), world_root)
+
+	# Segmented road plates give visible forward motion instead of one flat slab.
+	for i in range(16):
+		var z = -84.0 + float(i) * 6.0
+		var mat = mats["road"] if i % 2 == 0 else mats["road_panel"]
+		var plate = add_box("RoadPlate", Vector3(0, 0, z), Vector3(5.35, 0.08, 5.82), mat, world_root)
+		road_dash_nodes.append(plate)
+
+	add_box("LeftRail", Vector3(-3.45, 0.16, -38), Vector3(0.10, 0.13, 58.0), mats["road_side"], world_root)
+	add_box("RightRail", Vector3(3.45, 0.16, -38), Vector3(0.10, 0.13, 58.0), mats["road_side"], world_root)
+	add_box("LeftShoulder", Vector3(-3.15, 0.02, -38), Vector3(0.36, 0.04, 58.0), make_mat(Color(0.035, 0.030, 0.070)), world_root)
+	add_box("RightShoulder", Vector3(3.15, 0.02, -38), Vector3(0.36, 0.04, 58.0), make_mat(Color(0.035, 0.030, 0.070)), world_root)
+
 	for x in [-0.83, 0.83]:
-		add_box("Lane", Vector3(x, 0.13, -36), Vector3(0.028, 0.035, 46.0), mats["lane"], world_root)
-	for z in range(-80, 8, 5):
-		var dash = add_box("Dash", Vector3(0, 0.17, float(z)), Vector3(0.12, 0.035, 0.40), mats["lane"], world_root)
+		add_box("LaneLine", Vector3(x, 0.14, -38), Vector3(0.025, 0.035, 58.0), mats["lane"], world_root)
+	for z in range(-88, 8, 4):
+		var dash = add_box("CenterDash", Vector3(0, 0.18, float(z)), Vector3(0.10, 0.035, 0.42), mats["lane_glow"], world_root)
 		road_dash_nodes.append(dash)
-	for side_x in [-2.25, 2.25]:
-		for z in range(-82, 8, 7):
-			var side_dash = add_box("SpeedDash", Vector3(side_x, 0.18, float(z)), Vector3(0.055, 0.035, 0.80), mats["road_side"], world_root)
+	for side_x in [-2.40, 2.40]:
+		for z in range(-88, 8, 5):
+			var side_dash = add_box("EdgeDash", Vector3(side_x, 0.18, float(z)), Vector3(0.055, 0.035, 0.72), mats["road_side"], world_root)
 			road_dash_nodes.append(side_dash)
 
 func create_environment_props():
 	env_motion_nodes.clear()
 	var key = map_key()
-	for i in range(26):
-		var z = -78.0 + float(i) * 4.5
+	for i in range(34):
+		var z = -92.0 + float(i) * 4.1
 		var left_x = -5.9 - randf() * 1.2
 		var right_x = 5.9 + randf() * 1.2
 		match key:
@@ -264,11 +303,20 @@ func create_prop_group(name, x, z):
 
 func create_building(x, z):
 	var group = create_prop_group("BuildingGroup", x, z)
-	var h = randf_range(1.6, 5.2)
-	var w = randf_range(0.55, 1.05)
-	add_box("Building", Vector3(0, h * 0.5, 0), Vector3(w, h, randf_range(0.65, 1.05)), mats["env_dark"], group)
-	if randf() > 0.45:
-		add_box("WindowGlow", Vector3(0, h * 0.62, -0.56), Vector3(w * 0.42, 0.08, 0.018), mats["road_side"], group)
+	var h = randf_range(2.0, 6.2)
+	var w = randf_range(0.60, 1.15)
+	add_box("Building", Vector3(0, h * 0.5, 0), Vector3(w, h, randf_range(0.70, 1.18)), mats["env_dark"], group)
+	var floors = clamp(int(h * 1.35), 3, 9)
+	for f in range(floors):
+		if randf() > 0.32:
+			var y = 0.65 + float(f) * 0.45
+			add_box("Window", Vector3(-w * 0.18, y, -0.60), Vector3(0.10, 0.055, 0.018), mats["window"], group)
+			add_box("Window", Vector3(w * 0.18, y, -0.60), Vector3(0.10, 0.055, 0.018), mats["window"], group)
+	# occasional street light / sign for depth and premium feel
+	if randf() > 0.62:
+		var lamp_x = -sign(x) * 1.15
+		add_cylinder("LampPost", Vector3(lamp_x, 0.75, 0.15), 0.025, 1.5, mats["lane"], group)
+		add_sphere("Lamp", Vector3(lamp_x, 1.55, 0.15), Vector3(0.12, 0.12, 0.12), mats["lamp"], group)
 
 func create_tree(x, z):
 	var group = create_prop_group("TreeGroup", x, z)
@@ -296,21 +344,30 @@ func create_player():
 	player_root.position = Vector3(LANES[lane_index], BASE_Y, PLAYER_Z)
 	player_body = Node3D.new()
 	player_root.add_child(player_body)
-	add_box("PlayerShadow", Vector3(0, -0.46, 0.10), Vector3(0.55, 0.025, 0.34), mats["shadow"], player_body)
-	add_capsule("Body", Vector3(0, 0.40, 0), 0.23, 0.78, mats["player"], player_body)
-	add_sphere("Head", Vector3(0, 0.98, 0), Vector3(0.24, 0.24, 0.24), mats["player"], player_body)
-	add_box("Chest", Vector3(0, 0.37, -0.05), Vector3(0.32, 0.32, 0.08), mats["player_dark"], player_body)
-	player_arm_l = add_box("ArmL", Vector3(-0.28, 0.42, 0), Vector3(0.07, 0.36, 0.07), mats["player_dark"], player_body)
-	player_arm_r = add_box("ArmR", Vector3(0.28, 0.42, 0), Vector3(0.07, 0.36, 0.07), mats["player_dark"], player_body)
-	player_leg_l = add_box("LegL", Vector3(-0.12, -0.16, 0), Vector3(0.07, 0.32, 0.08), mats["player_dark"], player_body)
-	player_leg_r = add_box("LegR", Vector3(0.12, -0.16, 0), Vector3(0.07, 0.32, 0.08), mats["player_dark"], player_body)
+	add_box("PlayerShadow", Vector3(0, -0.43, 0.10), Vector3(0.62, 0.025, 0.38), mats["shadow"], player_body)
+	add_capsule("Torso", Vector3(0, 0.38, 0), 0.20, 0.74, mats["player"], player_body)
+	add_box("ChestPlate", Vector3(0, 0.42, -0.10), Vector3(0.34, 0.25, 0.07), mats["player_light"], player_body)
+	add_box("Backpack", Vector3(0, 0.40, 0.16), Vector3(0.30, 0.38, 0.08), mats["player_dark"], player_body)
+	player_head = add_sphere("Head", Vector3(0, 0.96, -0.02), Vector3(0.22, 0.22, 0.22), mats["player_light"], player_body)
+	add_box("Visor", Vector3(0, 0.98, -0.22), Vector3(0.18, 0.045, 0.025), mats["powerup"], player_body)
+	player_arm_l = add_box("ArmL", Vector3(-0.27, 0.42, 0), Vector3(0.065, 0.34, 0.065), mats["player_dark"], player_body)
+	player_arm_r = add_box("ArmR", Vector3(0.27, 0.42, 0), Vector3(0.065, 0.34, 0.065), mats["player_dark"], player_body)
+	player_leg_l = add_box("LegL", Vector3(-0.12, -0.17, 0), Vector3(0.07, 0.34, 0.08), mats["player_dark"], player_body)
+	player_leg_r = add_box("LegR", Vector3(0.12, -0.17, 0), Vector3(0.07, 0.34, 0.08), mats["player_dark"], player_body)
+	add_box("ShoeL", Vector3(-0.12, -0.36, -0.07), Vector3(0.12, 0.045, 0.20), mats["shoe"], player_body)
+	add_box("ShoeR", Vector3(0.12, -0.36, -0.07), Vector3(0.12, 0.045, 0.20), mats["shoe"], player_body)
+	player_trail_nodes.clear()
+	for i in range(3):
+		var trail = add_box("RunTrail", Vector3(0, 0.05, 0.35 + float(i) * 0.20), Vector3(0.06, 0.028, 0.20), mats["road_side"], player_body)
+		trail.visible = false
+		player_trail_nodes.append(trail)
 
 func create_camera():
 	camera = Camera3D.new()
 	camera.name = "Camera"
-	camera.position = Vector3(0, 4.75, 10.2)
-	camera.look_at(Vector3(0, 0.95, -20), Vector3.UP)
-	camera.fov = 72
+	camera.position = Vector3(0, 4.15, 8.20)
+	camera.look_at(Vector3(0, 1.10, -16), Vector3.UP)
+	camera.fov = 78
 	camera.current = true
 	add_child(camera)
 
@@ -331,20 +388,31 @@ func create_game_ui():
 	hud_label.add_theme_color_override("font_color", Color(0.94, 0.92, 1.0))
 	root.add_child(hud_label)
 
-	pause_button = make_button("Pause", 0.78, 0.032, 0.96, 0.082)
+	feedback_label = Label.new()
+	feedback_label.anchor_left = 0.30
+	feedback_label.anchor_right = 0.70
+	feedback_label.anchor_top = 0.18
+	feedback_label.anchor_bottom = 0.24
+	feedback_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	feedback_label.add_theme_font_size_override("font_size", 22)
+	feedback_label.add_theme_color_override("font_color", Color(1.0, 0.86, 0.26))
+	feedback_label.text = ""
+	root.add_child(feedback_label)
+
+	pause_button = make_button("Pause", 0.80, 0.035, 0.955, 0.085)
 	pause_button.pressed.connect(toggle_pause)
 	root.add_child(pause_button)
 
-	var left_btn = make_button("◀", 0.04, 0.865, 0.25, 0.94)
+	var left_btn = make_button("◀", 0.04, 0.865, 0.23, 0.935)
 	left_btn.pressed.connect(lane_left)
 	root.add_child(left_btn)
-	var right_btn = make_button("▶", 0.75, 0.865, 0.96, 0.94)
+	var right_btn = make_button("▶", 0.77, 0.865, 0.96, 0.935)
 	right_btn.pressed.connect(lane_right)
 	root.add_child(right_btn)
-	var jump_btn = make_button("JUMP", 0.30, 0.855, 0.48, 0.925)
+	var jump_btn = make_button("JUMP", 0.31, 0.865, 0.48, 0.935)
 	jump_btn.pressed.connect(jump)
 	root.add_child(jump_btn)
-	var slide_btn = make_button("SLIDE", 0.52, 0.855, 0.70, 0.925)
+	var slide_btn = make_button("SLIDE", 0.52, 0.865, 0.69, 0.935)
 	slide_btn.pressed.connect(slide)
 	root.add_child(slide_btn)
 
@@ -376,9 +444,26 @@ func make_button(text, l, t, r, b):
 	btn.anchor_top = t
 	btn.anchor_right = r
 	btn.anchor_bottom = b
-	btn.add_theme_font_size_override("font_size", 18)
-	btn.modulate = Color(1, 1, 1, 0.82)
+	btn.add_theme_font_size_override("font_size", 16)
+	btn.add_theme_color_override("font_color", Color(0.94, 0.92, 1.0, 0.92))
+	btn.add_theme_stylebox_override("normal", button_style(Color(0.045, 0.045, 0.070, 0.46)))
+	btn.add_theme_stylebox_override("hover", button_style(Color(0.20, 0.14, 0.35, 0.58)))
+	btn.add_theme_stylebox_override("pressed", button_style(Color(0.50, 0.32, 0.95, 0.72)))
 	return btn
+
+func button_style(color):
+	var style = StyleBoxFlat.new()
+	style.bg_color = color
+	style.corner_radius_top_left = 18
+	style.corner_radius_top_right = 18
+	style.corner_radius_bottom_left = 18
+	style.corner_radius_bottom_right = 18
+	style.border_width_left = 1
+	style.border_width_top = 1
+	style.border_width_right = 1
+	style.border_width_bottom = 1
+	style.border_color = Color(0.75, 0.62, 1.0, 0.18)
+	return style
 
 func reset_game():
 	for item in items:
@@ -388,6 +473,10 @@ func reset_game():
 	lane_index = 1
 	last_lane_index = 1
 	run_cycle = 0.0
+	screen_shake_timer = 0.0
+	feedback_timer = 0.0
+	if feedback_label:
+		feedback_label.text = ""
 	player_y = BASE_Y
 	vertical_velocity = 0.0
 	on_ground = true
@@ -404,8 +493,8 @@ func reset_game():
 	restart_button.visible = false
 	pause_button.text = "Pause"
 	player_root.position = Vector3(LANES[lane_index], BASE_Y, PLAYER_Z)
-	for i in range(8):
-		spawn_item(-22.0 - float(i) * 9.2)
+	for i in range(9):
+		spawn_item(-24.0 - float(i) * 9.8)
 	update_hud()
 
 func game_speed():
@@ -448,7 +537,10 @@ func update_player(delta):
 	player_body.rotation_degrees.z = lerp(player_body.rotation_degrees.z, lane_lean, min(delta * 8.0, 1.0))
 	player_body.rotation_degrees.y = sin(run_cycle * 0.8) * 3.5
 	player_body.rotation_degrees.x = lerp(player_body.rotation_degrees.x, -13.0 if slide_timer > 0.0 else 0.0, min(delta * 9.0, 1.0))
+	if player_head:
+		player_head.position.y = 0.96 + run_bob * 0.45
 	animate_runner_limbs(delta)
+	update_runner_trails(delta)
 
 func animate_runner_limbs(delta):
 	if player_arm_l == null or player_leg_l == null:
@@ -462,10 +554,22 @@ func animate_runner_limbs(delta):
 	player_leg_l.rotation_degrees.x = lerp(player_leg_l.rotation_degrees.x, swing_back * leg_amount, min(delta * 12.0, 1.0))
 	player_leg_r.rotation_degrees.x = lerp(player_leg_r.rotation_degrees.x, swing * leg_amount, min(delta * 12.0, 1.0))
 
+func update_runner_trails(delta):
+	var active = on_ground and slide_timer <= 0.0 and game_speed() > 8.5
+	for i in range(player_trail_nodes.size()):
+		var trail = player_trail_nodes[i]
+		if is_instance_valid(trail):
+			trail.visible = active and (sin(run_cycle * 1.7 + float(i)) > -0.2)
+			trail.position.z = 0.34 + float(i) * 0.18 + fmod(run_cycle * 0.08, 0.18)
+
+
 func update_powerups(delta):
 	shield_timer = max(0.0, shield_timer - delta)
 	magnet_timer = max(0.0, magnet_timer - delta)
 	double_timer = max(0.0, double_timer - delta)
+	feedback_timer = max(0.0, feedback_timer - delta)
+	if feedback_label and feedback_timer <= 0.0:
+		feedback_label.text = ""
 
 func update_spawning(delta):
 	spawn_timer -= delta
@@ -498,22 +602,26 @@ func update_world_motion(delta):
 	var move = game_speed() * delta
 	for dash in road_dash_nodes:
 		if is_instance_valid(dash):
-			dash.position.z += move * 1.55
-			if dash.position.z > 7.5:
-				dash.position.z -= 88.0
+			dash.position.z += move * 1.45
+			if dash.position.z > 10.0:
+				dash.position.z -= 96.0
 	for prop in env_motion_nodes:
 		if is_instance_valid(prop):
-			prop.position.z += move * 0.72
-			if prop.position.z > 9.0:
-				prop.position.z -= 118.0
+			prop.position.z += move * 0.78
+			if prop.position.z > 10.0:
+				prop.position.z -= 135.0
 
 func update_camera(delta):
-	var speed_push = clamp((game_speed() - 9.0) * 0.035, 0.0, 0.32)
-	var bob = sin(run_cycle * 0.55) * 0.045
-	var target_pos = Vector3(player_root.position.x * 0.24, 4.45 + bob, 9.45 - speed_push)
-	camera.position = camera.position.lerp(target_pos, min(delta * 4.8, 1.0))
-	camera.fov = lerp(camera.fov, 72.0 + speed_push * 10.0, min(delta * 2.5, 1.0))
-	camera.look_at(Vector3(player_root.position.x * 0.10, 1.15 + bob, -18.5), Vector3.UP)
+	var speed_push = clamp((game_speed() - 9.0) * 0.040, 0.0, 0.40)
+	var bob = sin(run_cycle * 0.58) * 0.050
+	var shake = Vector3.ZERO
+	if screen_shake_timer > 0.0:
+		screen_shake_timer = max(0.0, screen_shake_timer - delta)
+		shake = Vector3(randf_range(-0.10, 0.10), randf_range(-0.06, 0.06), 0) * (screen_shake_timer / 0.30)
+	var target_pos = Vector3(player_root.position.x * 0.18, 3.85 + bob, 8.15 - speed_push) + shake
+	camera.position = camera.position.lerp(target_pos, min(delta * 5.5, 1.0))
+	camera.fov = lerp(camera.fov, 78.0 + speed_push * 9.0, min(delta * 2.7, 1.0))
+	camera.look_at(Vector3(player_root.position.x * 0.08, 1.08 + bob, -18.0), Vector3.UP)
 
 func update_hud():
 	var score = int(distance_score)
@@ -567,21 +675,29 @@ func create_item_node(kind):
 	match kind:
 		"coin":
 			add_cylinder("Coin", Vector3.ZERO, 0.22, 0.08, mats["coin"], root).rotation_degrees.x = 90
+			add_sphere("CoinGlow", Vector3.ZERO, Vector3(0.30, 0.30, 0.04), mats["coin"], root)
 		"powerup":
-			add_sphere("Powerup", Vector3.ZERO, Vector3(0.24, 0.24, 0.24), mats["powerup"], root)
+			add_sphere("PowerCore", Vector3.ZERO, Vector3(0.23, 0.23, 0.23), mats["powerup"], root)
+			add_cylinder("PowerRing", Vector3.ZERO, 0.32, 0.035, mats["powerup"], root).rotation_degrees.x = 90
 		"gate":
-			add_box("GateTop", Vector3(0, 0, 0), Vector3(0.72, 0.12, 0.12), mats["powerup"], root)
-			add_box("GateL", Vector3(-0.36, -0.66, 0), Vector3(0.06, 1.12, 0.08), mats["powerup"], root)
-			add_box("GateR", Vector3(0.36, -0.66, 0), Vector3(0.06, 1.12, 0.08), mats["powerup"], root)
+			add_box("GateTop", Vector3(0, 0, 0), Vector3(0.80, 0.12, 0.14), mats["powerup"], root)
+			add_box("GateL", Vector3(-0.40, -0.66, 0), Vector3(0.07, 1.12, 0.09), mats["powerup"], root)
+			add_box("GateR", Vector3(0.40, -0.66, 0), Vector3(0.07, 1.12, 0.09), mats["powerup"], root)
 		"ramp":
-			add_box("Ramp", Vector3.ZERO, Vector3(0.62, 0.24, 0.62), mats["box"], root)
+			add_box("RampBase", Vector3(0, -0.02, 0), Vector3(0.70, 0.20, 0.64), mats["box"], root)
+			add_box("RampStripe", Vector3(0, 0.12, -0.18), Vector3(0.56, 0.028, 0.06), mats["box_band"], root)
 			root.rotation_degrees.x = -12
 		"cone":
-			add_cylinder("Cone", Vector3.ZERO, 0.26, 0.62, mats["obstacle"], root)
+			add_cylinder("Cone", Vector3(0, 0.0, 0), 0.22, 0.58, mats["obstacle"], root)
+			add_box("ConeStripe", Vector3(0, 0.05, -0.22), Vector3(0.26, 0.035, 0.018), mats["box_band"], root)
 		"barrier":
-			add_box("Barrier", Vector3.ZERO, Vector3(0.82, 0.48, 0.28), mats["obstacle"], root)
+			add_box("Barrier", Vector3(0, 0.02, 0), Vector3(0.82, 0.40, 0.18), mats["obstacle"], root)
+			add_box("BarrierStripe", Vector3(0, 0.12, -0.11), Vector3(0.70, 0.05, 0.025), mats["box_band"], root)
+			add_box("BarrierBase", Vector3(0, -0.26, 0), Vector3(0.90, 0.08, 0.28), mats["obstacle_dark"], root)
 		_:
-			add_box("Box", Vector3.ZERO, Vector3(0.62, 0.62, 0.62), mats["box"], root)
+			add_box("Crate", Vector3.ZERO, Vector3(0.58, 0.58, 0.58), mats["box"], root)
+			add_box("CrateBandH", Vector3(0, 0.02, -0.31), Vector3(0.60, 0.055, 0.025), mats["box_band"], root)
+			add_box("CrateBandV", Vector3(0.18, 0.02, -0.32), Vector3(0.055, 0.58, 0.025), mats["box_band"], root)
 	return root
 
 func check_collision(item, remove_list):
@@ -609,18 +725,30 @@ func check_collision(item, remove_list):
 
 func collect_item(item):
 	if item.kind == "coin":
-		coins += 2 if double_timer > 0.0 else 1
+		var gain = 2 if double_timer > 0.0 else 1
+		coins += gain
 		distance_score += 30
+		show_feedback("+%d coin" % gain)
 	elif item.kind == "powerup":
 		var p = randi_range(0, 2)
 		if p == 0:
 			shield_timer = 6.0
+			show_feedback("Shield")
 		elif p == 1:
 			magnet_timer = 7.0
+			show_feedback("Magnet")
 		else:
 			double_timer = 8.0
+			show_feedback("2x Coins")
+
+func show_feedback(text):
+	if feedback_label:
+		feedback_label.text = text
+		feedback_timer = 1.0
+
 
 func end_game():
+	screen_shake_timer = 0.30
 	is_game_over = true
 	var final_score = int(distance_score)
 	if final_score > best_score:

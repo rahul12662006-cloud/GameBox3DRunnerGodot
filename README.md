@@ -1,11 +1,12 @@
-# GameBox 3D Runner - Phase 5A.3 Motion Feel Patch
+# GameBox 3D Runner Godot - Phase 5A.4
 
-This patch improves the Godot 3D runner motion feel without generating images or assets.
+Real 3D runner prototype for GameBox Builder.
 
-Changes:
-- Adds visible runner body bob, arm swing, leg swing, and lane-change lean.
-- Adds camera bob/follow/FOV motion so the runner feels more alive.
-- Adds scrolling road dash cues and side environment parallax.
-- Keeps the Godot real-3D template/config system intact.
+Includes fixes through Phase 5A.4:
+- Android export preset fix.
+- Android black-screen fix using compatibility renderer.
+- Visual/camera cleanup.
+- Runner motion-feel upgrade: animated limbs, body bob, lane-change lean, camera bob/FOV, road dash motion, side environment parallax.
+- Procedural low-poly polish: segmented road, better rails/lane glow, cleaner buildings/windows/street lights, improved player model details, polished obstacles, transparent rounded controls, feedback text, small screen shake.
 
-Apply over the current GameBox3DRunnerGodot repo.
+Build via GitHub Actions and download the Android APK artifact.

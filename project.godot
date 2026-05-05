@@ -1,6 +1,5 @@
-; Engine configuration file.
-; Generated for GameBox Builder real 3D runner prototype.
-; Godot 4.6.x project.
+; GameBox 3D Runner — Android black screen fix profile.
+; Uses compatibility renderer to avoid Vulkan/mobile renderer black-screen issues on some phones.
 
 config_version=5
 
@@ -9,7 +8,8 @@ config/name="GameBox 3D Runner"
 run/main_scene="res://scenes/Main.tscn"
 config/features=PackedStringArray("4.6", "Mobile")
 config/icon="res://icon.svg"
-boot_splash/bg_color=Color(0.04, 0.04, 0.07, 1)
+boot_splash/bg_color=Color(0.03, 0.03, 0.06, 1)
+boot_splash/show_image=true
 
 [display]
 window/size/viewport_width=720
@@ -18,11 +18,7 @@ window/size/mode=3
 window/handheld/orientation=1
 
 [rendering]
-renderer/rendering_method="mobile"
-renderer/rendering_method.mobile="mobile"
-environment/defaults/default_clear_color=Color(0.04, 0.04, 0.08, 1)
-anti_aliasing/quality/msaa_3d=2
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+environment/defaults/default_clear_color=Color(0.035, 0.035, 0.065, 1)
 textures/vram_compression/import_etc2_astc=true
-
-[physics]
-3d/run_on_separate_thread=true

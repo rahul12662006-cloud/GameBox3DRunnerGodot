@@ -1,7 +1,7 @@
 extends Node3D
 
 # GameBox 3D Runner - Android-safe real 3D prototype.
-# Phase 5A.5: auto CC0 asset pipeline + runtime model scanner with procedural fallback.
+# Phase 5A.7A: locked asset pipeline for real model packs + safe fallback.
 
 const LANES = [-1.65, 0.0, 1.65]
 const PLAYER_Z = 3.2
@@ -63,6 +63,7 @@ var feedback_label
 var feedback_timer = 0.0
 var asset_catalog = {}
 var asset_mode = "built_in_fallback"
+var locked_asset_warnings = []
 
 func _ready():
 	randomize()
@@ -153,18 +154,35 @@ func scan_asset_catalog():
 		"environment": [],
 		"character": []
 	}
+	locked_asset_warnings.clear()
+
+	# Phase 5A.7A: strict, predictable asset order.
+	# 1) User-provided locked packs are highest priority.
+	# 2) Bundled GameBox starter GLBs are fallback assets.
+	# 3) Old random/vendor scan is intentionally avoided for visuals, because it produced ugly/mismatched output.
 	var roots = [
-		"res://assets/vendor/kenney_3d_road_tiles",
-		"res://assets/imported",
-		"res://assets/models"
+		"res://assets/gamebox_locked/player/quaternius_fantasy",
+		"res://assets/gamebox_locked/obstacles",
+		"res://assets/gamebox_locked/environment",
+		"res://assets/gamebox_locked/road",
+		"res://assets/models/gamebox_lowpoly"
 	]
 	for root_path in roots:
 		scan_asset_dir(root_path)
+
 	var total = 0
 	for key in asset_catalog.keys():
+		asset_catalog[key].sort()
 		total += asset_catalog[key].size()
-	asset_mode = "auto_cc0_assets" if total > 0 else "built_in_fallback"
+	if has_locked_character():
+		asset_mode = "locked_character_pack"
+	elif total > 0:
+		asset_mode = "gamebox_starter_pack"
+	else:
+		asset_mode = "built_in_fallback"
 	print("GameBox asset mode: ", asset_mode, " models=", total)
+	if not has_locked_character():
+		locked_asset_warnings.append("Drop Quaternius fantasy .glb/.gltf files into assets/gamebox_locked/player/quaternius_fantasy/")
 
 func scan_asset_dir(dir_path):
 	var dir = DirAccess.open(dir_path)
@@ -188,11 +206,15 @@ func scan_asset_dir(dir_path):
 
 func categorize_asset(path):
 	var lower = path.to_lower()
-	if lower.find("character") >= 0 or lower.find("runner") >= 0 or lower.find("person") >= 0 or lower.find("robot") >= 0:
+	# Locked player pack: Quaternius fantasy files may not contain the word "character", so we trust the folder.
+	if lower.find("gamebox_locked/player") >= 0:
 		register_asset("character", path)
-	if lower.find("road") >= 0 or lower.find("street") >= 0 or lower.find("asphalt") >= 0:
+		return
+	if lower.find("character") >= 0 or lower.find("runner") >= 0 or lower.find("person") >= 0 or lower.find("robot") >= 0 or lower.find("hero") >= 0 or lower.find("adventurer") >= 0:
+		register_asset("character", path)
+	if lower.find("road") >= 0 or lower.find("street") >= 0 or lower.find("asphalt") >= 0 or lower.find("lane") >= 0:
 		register_asset("road", path)
-	if lower.find("barrier") >= 0 or lower.find("fence") >= 0 or lower.find("block") >= 0:
+	if lower.find("barrier") >= 0 or lower.find("fence") >= 0 or lower.find("block") >= 0 or lower.find("gate") >= 0:
 		register_asset("barrier", path)
 	if lower.find("cone") >= 0:
 		register_asset("cone", path)
@@ -216,12 +238,33 @@ func register_asset(key, path):
 func has_asset(key):
 	return asset_catalog.has(key) and asset_catalog[key].size() > 0
 
+func has_locked_character():
+	if not has_asset("character"):
+		return false
+	for path in asset_catalog["character"]:
+		if str(path).find("gamebox_locked/player") >= 0:
+			return true
+	return false
+
+func preferred_asset_path(key):
+	if not has_asset(key):
+		return ""
+	var paths = asset_catalog[key]
+	# Locked assets first, then starter pack. For character, avoid random pick for stable builds.
+	for path in paths:
+		if str(path).find("gamebox_locked") >= 0:
+			return path
+	return paths[0] if key == "character" else paths.pick_random()
+
 func instantiate_asset_model(key, parent, pos := Vector3.ZERO, scale_value := Vector3.ONE, rot_degrees := Vector3.ZERO):
 	if not has_asset(key):
 		return null
-	var path = asset_catalog[key].pick_random()
+	var path = preferred_asset_path(key)
+	if path == "":
+		return null
 	var res = load(path)
 	if res == null:
+		print("GameBox asset failed to load: ", path)
 		return null
 	var node = null
 	if res is PackedScene:
@@ -236,7 +279,50 @@ func instantiate_asset_model(key, parent, pos := Vector3.ZERO, scale_value := Ve
 	node.scale = scale_value
 	node.rotation_degrees = rot_degrees
 	parent.add_child(node)
+	if key == "character":
+		fit_visual_model_to_height(node, 1.26, -0.42)
 	return node
+
+func fit_visual_model_to_height(node, target_height, bottom_y):
+	# Normalizes imported GLB/GLTF characters so random pack scale does not break the camera.
+	if node == null:
+		return
+	var bounds = {"found": false, "min": Vector3(99999, 99999, 99999), "max": Vector3(-99999, -99999, -99999)}
+	accumulate_mesh_bounds(node, bounds)
+	if not bool(bounds["found"]):
+		return
+	var min_v = bounds["min"]
+	var max_v = bounds["max"]
+	var h = max(0.01, max_v.y - min_v.y)
+	var factor = target_height / h
+	node.scale *= factor
+	# Recalculate after scaling and put the model feet near the same baseline as fallback player.
+	bounds = {"found": false, "min": Vector3(99999, 99999, 99999), "max": Vector3(-99999, -99999, -99999)}
+	accumulate_mesh_bounds(node, bounds)
+	if bool(bounds["found"]):
+		node.position.y += bottom_y - bounds["min"].y
+
+func accumulate_mesh_bounds(node, bounds):
+	if node is MeshInstance3D and node.mesh != null:
+		var aabb = node.mesh.get_aabb()
+		var corners = [
+			aabb.position,
+			aabb.position + Vector3(aabb.size.x, 0, 0),
+			aabb.position + Vector3(0, aabb.size.y, 0),
+			aabb.position + Vector3(0, 0, aabb.size.z),
+			aabb.position + Vector3(aabb.size.x, aabb.size.y, 0),
+			aabb.position + Vector3(aabb.size.x, 0, aabb.size.z),
+			aabb.position + Vector3(0, aabb.size.y, aabb.size.z),
+			aabb.position + aabb.size
+		]
+		for corner in corners:
+			var p = node.global_transform * corner
+			bounds["min"] = Vector3(min(bounds["min"].x, p.x), min(bounds["min"].y, p.y), min(bounds["min"].z, p.z))
+			bounds["max"] = Vector3(max(bounds["max"].x, p.x), max(bounds["max"].y, p.y), max(bounds["max"].z, p.z))
+			bounds["found"] = true
+	for child in node.get_children():
+		if child is Node:
+			accumulate_mesh_bounds(child, bounds)
 
 func create_asset_prop(key, x, z, scale_min := 0.65, scale_max := 1.15):
 	var group = create_prop_group("AssetProp_" + key, x, z)
@@ -470,8 +556,8 @@ func create_player():
 	player_root.add_child(player_body)
 	add_box("PlayerShadow", Vector3(0, -0.43, 0.10), Vector3(0.66, 0.025, 0.42), mats["shadow"], player_body)
 
-	# Phase 5A.6: prefer bundled GLB character assets. Fallback remains code-only.
-	var imported_player = instantiate_asset_model("character", player_body, Vector3(0, -0.34, -0.04), Vector3(0.62, 0.62, 0.62), Vector3(0, 180, 0))
+	# Phase 5A.7A: prefer locked Quaternius fantasy/player assets. Fallback remains code-only.
+	var imported_player = instantiate_asset_model("character", player_body, Vector3(0, -0.34, -0.04), Vector3(1.0, 1.0, 1.0), Vector3(0, 180, 0))
 	if imported_player != null:
 		player_head = null
 		player_arm_l = null
@@ -766,8 +852,12 @@ func update_camera(delta):
 func update_hud():
 	var score = int(distance_score)
 	hud_label.text = "%s\nScore: %d   Best: %d   Coins: %d\nLane: %d   Speed: %s   Difficulty: %s" % [str(config.get("gameName", "3D Runner")), score, best_score, coins, lane_index + 1, str(config.get("speed", 3)), str(config.get("difficulty", 2))]
-	if asset_mode == "auto_cc0_assets":
-		hud_label.text += "\nAssets: GameBox low-poly pack"
+	if asset_mode == "locked_character_pack":
+		hud_label.text += "\nAssets: Locked character pack"
+	elif asset_mode == "gamebox_starter_pack":
+		hud_label.text += "\nAssets: GameBox starter pack"
+	elif locked_asset_warnings.size() > 0:
+		hud_label.text += "\nAssets: fallback - add locked character pack"
 	var buffs = []
 	if shield_timer > 0.0:
 		buffs.append("Shield %ds" % int(ceil(shield_timer)))

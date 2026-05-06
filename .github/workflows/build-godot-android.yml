@@ -48,11 +48,11 @@ jobs:
           SETTINGS
 
 
-      - name: Install optional CC0 game assets
+      - name: Prepare locked game assets
         run: |
           set -e
           bash tools/install_cc0_assets.sh || true
-          find assets -maxdepth 3 -type f | sed 's#^#asset: #' | head -80
+          find assets -maxdepth 6 -type f | sed 's#^#asset: #' | head -140
 
       - name: Export Android debug APK
         run: |

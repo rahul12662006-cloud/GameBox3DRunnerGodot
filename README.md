@@ -1,30 +1,29 @@
-# GameBox 3D Runner Godot - Phase 5A.4
+# GameBox 3D Runner Godot
 
-Real 3D runner prototype for GameBox Builder.
+Phase 5A.7A focuses on a locked asset pipeline for proper visuals.
 
-Includes fixes through Phase 5A.4:
-- Android export preset fix.
-- Android black-screen fix using compatibility renderer.
-- Visual/camera cleanup.
-- Runner motion-feel upgrade: animated limbs, body bob, lane-change lean, camera bob/FOV, road dash motion, side environment parallax.
-- Procedural low-poly polish: segmented road, better rails/lane glow, cleaner buildings/windows/street lights, improved player model details, polished obstacles, transparent rounded controls, feedback text, small screen shake.
+## Current state
 
-Build via GitHub Actions and download the Android APK artifact.
+- Real Godot 3D runner prototype
+- Lane left/right, jump, slide
+- Obstacles, coins, score, game over
+- Android GitHub Actions APK build
+- Locked asset loader for Quaternius player pack
 
-## Phase 5A.5 - Auto CC0 Asset Pipeline
+## Add the Quaternius character pack
 
-This build adds an automated asset pipeline. During GitHub Actions, `tools/install_cc0_assets.sh` tries to download Kenney CC0 3D Road Tiles and places compatible model files under `assets/vendor/kenney_3d_road_tiles/`.
+1. Download the Quaternius Modular Character Outfits Fantasy pack.
+2. Rename the ZIP to:
+   `quaternius_fantasy.zip`
+3. Upload it into:
+   `assets/imported_packs/`
+4. Run GitHub Actions again.
 
-If the download fails or the pack structure changes, the APK still builds using built-in fallback models.
+The build script extracts `.glb` / `.gltf` files into:
+`assets/gamebox_locked/player/quaternius_fantasy/`
 
-Manual asset option:
+The game loads locked assets first, then falls back to bundled GameBox starter GLBs, then procedural shapes.
 
-1. Place `.glb`, `.gltf`, `.obj`, `.tscn`, or `.scn` files under `assets/imported/`.
-2. Push to GitHub.
-3. Re-run the APK workflow.
+## Why locked assets?
 
-The runtime scans these folders and uses matching models for barriers, cones, crates, lamps, buildings, and environment props when available.
-
-## Phase 5A.6
-
-Added bundled GLB starter assets and disabled OBJ-only auto-import to avoid missing `.mtl` import errors. The runner now prefers local GLB assets from `assets/models/gamebox_lowpoly/` before falling back to procedural shapes.
+The earlier random auto asset scan created inconsistent visuals and missing `.mtl` import warnings. Locked assets keep the project predictable and easier to polish.

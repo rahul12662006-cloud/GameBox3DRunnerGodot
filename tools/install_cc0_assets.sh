@@ -1,69 +1,101 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# GameBox 3D Runner - optional CC0 asset auto-installer.
-# This runs in GitHub Actions before Godot exports the APK.
-# If the remote source is unavailable, the game still builds and falls back to built-in procedural models.
+# GameBox 3D Runner - locked asset installer.
+# Phase 5A.7A
+# This does NOT random-scan the internet during builds. It prepares a clean pipeline.
+# Optional: place a downloaded Quaternius character zip at:
+#   assets/imported_packs/quaternius_fantasy.zip
+# The workflow will extract compatible .glb/.gltf files into:
+#   assets/gamebox_locked/player/quaternius_fantasy/
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-WORK_DIR="${ROOT_DIR}/.asset_cache"
-VENDOR_DIR="${ROOT_DIR}/assets/vendor/kenney_3d_road_tiles"
-MANIFEST="${ROOT_DIR}/assets/gamebox/asset_manifest.json"
+CACHE_DIR="${ROOT_DIR}/.asset_cache"
+PACK_DIR="${ROOT_DIR}/assets/imported_packs"
+LOCKED_ROOT="${ROOT_DIR}/assets/gamebox_locked"
+PLAYER_DIR="${LOCKED_ROOT}/player/quaternius_fantasy"
+ROAD_DIR="${LOCKED_ROOT}/road"
+OBSTACLE_DIR="${LOCKED_ROOT}/obstacles"
+ENV_DIR="${LOCKED_ROOT}/environment"
+UI_DIR="${LOCKED_ROOT}/ui"
+MANIFEST="${LOCKED_ROOT}/asset_status.json"
 
-mkdir -p "${WORK_DIR}" "${VENDOR_DIR}" "${ROOT_DIR}/assets/gamebox"
+mkdir -p "${CACHE_DIR}" "${PACK_DIR}" "${PLAYER_DIR}" "${ROAD_DIR}" "${OBSTACLE_DIR}" "${ENV_DIR}" "${UI_DIR}"
 
-KENNEY_ROAD_TILES_URL="${KENNEY_ROAD_TILES_URL:-https://www.kenney.nl/media/pages/assets/3d-road-tiles/cc89145087-1677581262/kenney_3d-road-tiles.zip}"
-ZIP_PATH="${WORK_DIR}/kenney_3d_road_tiles.zip"
-UNPACK_DIR="${WORK_DIR}/kenney_3d_road_tiles"
+cat > "${LOCKED_ROOT}/README_LOCKED_ASSETS.md" <<'TXT'
+# GameBox Locked Assets
 
-cat > "${ROOT_DIR}/assets/README_ASSETS.md" <<'TXT'
-# GameBox Asset Pipeline
+Use this folder for hand-picked, predictable assets.
 
-This project can auto-install CC0 Kenney 3D Road Tiles during GitHub Actions builds.
-If the download fails, the game falls back to its built-in procedural models, so APK builds should not break.
+Recommended player pack:
+- Quaternius Modular Character Outfits Fantasy
+- Put downloaded zip here before build: `assets/imported_packs/quaternius_fantasy.zip`
 
-Optional manual assets can be placed under:
+The GitHub Action will extract compatible `.glb` and `.gltf` files into:
+`assets/gamebox_locked/player/quaternius_fantasy/`
 
-- assets/vendor/kenney_3d_road_tiles/
-- assets/imported/
-
-Godot will scan these folders and use compatible .glb, .gltf, .obj, .tscn, or .scn files when possible.
+Why this exists:
+- Random OBJ/MTL imports caused ugly or broken visuals.
+- Locked assets make the game predictable and easier to polish.
 TXT
 
-printf '{\n  "installed": false,\n  "source": "kenney_3d_road_tiles",\n  "modelCount": 0\n}\n' > "${MANIFEST}"
+for d in "${PACK_DIR}" "${PLAYER_DIR}" "${ROAD_DIR}" "${OBSTACLE_DIR}" "${ENV_DIR}" "${UI_DIR}"; do
+  touch "${d}/.gitkeep"
+done
 
-if [[ -n "${GAMEBOX_SKIP_ASSET_DOWNLOAD:-}" ]]; then
-  echo "GAMEBOX_SKIP_ASSET_DOWNLOAD is set; skipping CC0 asset download."
-  exit 0
-fi
-
-echo "Downloading CC0 Kenney 3D Road Tiles..."
-if ! curl -L --fail --retry 3 --retry-delay 2 -o "${ZIP_PATH}" "${KENNEY_ROAD_TILES_URL}"; then
-  echo "::warning::Could not download CC0 assets. Continuing with procedural fallback visuals."
-  exit 0
-fi
-
-rm -rf "${UNPACK_DIR}"
-mkdir -p "${UNPACK_DIR}"
-unzip -q -o "${ZIP_PATH}" -d "${UNPACK_DIR}"
-
-# Copy only Godot-friendly self-contained model files by default.
-# We intentionally skip .obj here because many OBJ files reference separate .mtl files;
-# missing MTL files caused noisy Godot import errors and the game fell back to procedural blocks.
 count=0
-while IFS= read -r -d '' file; do
-  base="$(basename "$file")"
-  lower="$(printf '%s' "$base" | tr '[:upper:]' '[:lower:]')"
-  if [[ "$lower" == *"road"* || "$lower" == *"barrier"* || "$lower" == *"cone"* || "$lower" == *"lamp"* || "$lower" == *"sign"* || "$lower" == *"street"* || "$lower" == *"light"* ]]; then
+source_pack="none"
+zip_path="${PACK_DIR}/quaternius_fantasy.zip"
+if [[ -f "${zip_path}" ]]; then
+  echo "Found Quaternius fantasy character pack: ${zip_path}"
+  rm -rf "${CACHE_DIR}/quaternius_fantasy"
+  mkdir -p "${CACHE_DIR}/quaternius_fantasy"
+  unzip -q -o "${zip_path}" -d "${CACHE_DIR}/quaternius_fantasy"
+
+  # Clean previously extracted dynamic files but keep README/.gitkeep.
+  find "${PLAYER_DIR}" -maxdepth 1 -type f \( -iname '*.glb' -o -iname '*.gltf' -o -iname '*.bin' -o -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' \) -delete
+
+  # Copy a limited stable set to keep APK size reasonable.
+  while IFS= read -r -d '' file; do
+    base="$(basename "$file")"
+    lower="$(printf '%s' "$base" | tr '[:upper:]' '[:lower:]')"
+    # Prefer real model-looking files and avoid huge preview/sample files when names expose that.
+    if [[ "$lower" == *preview* || "$lower" == *thumbnail* ]]; then
+      continue
+    fi
     safe_name="$(printf '%s' "$base" | tr ' ' '_' | tr -cd '[:alnum:]_.-')"
-    cp -f "$file" "${VENDOR_DIR}/${safe_name}"
+    cp -f "$file" "${PLAYER_DIR}/${safe_name}"
     count=$((count + 1))
-  fi
-  if [[ "$count" -ge 40 ]]; then
-    break
-  fi
-done < <(find "${UNPACK_DIR}" -type f \( -iname '*.glb' -o -iname '*.gltf' \) -print0)
+    if [[ "$count" -ge 12 ]]; then
+      break
+    fi
+  done < <(find "${CACHE_DIR}/quaternius_fantasy" -type f \( -iname '*.glb' -o -iname '*.gltf' \) -print0)
 
-printf '{\n  "installed": true,\n  "source": "kenney_3d_road_tiles",\n  "modelCount": %d\n}\n' "$count" > "${MANIFEST}"
+  # If glTF files reference .bin/textures next to them, copy nearby support files too.
+  while IFS= read -r -d '' file; do
+    cp -f "$file" "${PLAYER_DIR}/$(basename "$file")" || true
+  done < <(find "${CACHE_DIR}/quaternius_fantasy" -type f \( -iname '*.bin' -o -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' \) -print0 | head -z -n 60)
+  source_pack="quaternius_fantasy_zip"
+else
+  echo "No assets/imported_packs/quaternius_fantasy.zip found. Build will use GameBox starter/fallback player."
+  cat > "${PACK_DIR}/README_DROP_QUATERNIUS_ZIP_HERE.md" <<'TXT'
+# Drop Quaternius Pack Here
 
-echo "Installed ${count} CC0 model files into assets/vendor/kenney_3d_road_tiles"
+Put the downloaded character pack ZIP here and rename it exactly:
+
+`quaternius_fantasy.zip`
+
+Then run GitHub Actions again.
+TXT
+fi
+
+cat > "${MANIFEST}" <<JSON
+{
+  "phase": "5A.7A",
+  "sourcePack": "${source_pack}",
+  "playerModelsInstalled": ${count},
+  "lockedPlayerFolder": "assets/gamebox_locked/player/quaternius_fantasy"
+}
+JSON
+
+echo "Locked asset install complete. Player model count: ${count}"

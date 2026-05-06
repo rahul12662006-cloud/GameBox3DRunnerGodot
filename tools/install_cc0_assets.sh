@@ -95,6 +95,18 @@ if [[ -f "${zip_path}" ]]; then
   printf '%s\n' "${selected_rel}" > "${PLAYER_DIR}/SELECTED_PLAYER_PATH.txt"
   printf '%s\n' "${selected_rel}" > "${ACTIVE_DIR}/SELECTED_PLAYER_PATH.txt"
 
+  # Create a wrapper scene that directly instances the selected glTF.
+  # This forces Godot to import/include the character and avoids runtime directory scans on Android.
+  mkdir -p "${ROOT_DIR}/scenes"
+  cat > "${ROOT_DIR}/scenes/LockedCharacter.tscn" <<TSCN
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="PackedScene" path="res://${selected_rel}" id="1_gbx_player"]
+
+[node name="LockedCharacter" instance=ExtResource("1_gbx_player")]
+TSCN
+  echo "Generated wrapper scene: scenes/LockedCharacter.tscn -> res://${selected_rel}"
+
   count=$(find "${ACTIVE_DIR}" -type f \( -iname '*.glb' -o -iname '*.gltf' \) | wc -l | tr -d ' ')
   source_pack="quaternius_fantasy_zip"
 
@@ -110,7 +122,7 @@ fi
 
 cat > "${MANIFEST}" <<JSON
 {
-  "phase": "5A.7D",
+  "phase": "5A.7E",
   "sourcePack": "${source_pack}",
   "playerModelsInstalled": ${count},
   "selectedPlayer": "${selected_rel}",

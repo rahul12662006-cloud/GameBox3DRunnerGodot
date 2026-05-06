@@ -1,7 +1,7 @@
 extends Node3D
 
 # GameBox 3D Runner - Android-safe real 3D prototype.
-# Phase 5A.7D: deterministic locked Quaternius active outfit loading + safe fallback.
+# Phase 5A.7E: generated wrapper scene locked character loading + safe fallback.
 
 const LANES = [-1.65, 0.0, 1.65]
 const PLAYER_Z = 3.2
@@ -196,20 +196,11 @@ func scan_asset_catalog():
 
 
 func read_selected_player_path():
-	var marker_paths = [
-		"res://assets/gamebox_locked/player/quaternius_fantasy/SELECTED_PLAYER_PATH.txt",
-		"res://assets/gamebox_locked/player/quaternius_fantasy/active/SELECTED_PLAYER_PATH.txt",
-		"res://assets/gamebox_locked/player/SELECTED_PLAYER_PATH.txt"
-	]
-	for marker in marker_paths:
-		if FileAccess.file_exists(marker):
-			var text = FileAccess.get_file_as_string(marker).strip_edges()
-			if text != "":
-				text = text.replace("\\", "/")
-				if text.begins_with("res://"):
-					return text
-				return "res://" + text
-	return ""
+	# Phase 5A.7E: load the generated wrapper scene first.
+	# Directory scanning and TXT marker checks were unreliable in exported Android builds.
+	# The GitHub Actions asset installer creates this scene after extracting the LFS ZIP,
+	# and the scene directly references the selected full outfit glTF.
+	return "res://scenes/LockedCharacter.tscn"
 
 func try_load_scene_or_mesh(path):
 	if path == "":
@@ -652,7 +643,7 @@ func create_player():
 	player_root.add_child(player_body)
 	add_box("PlayerShadow", Vector3(0, -0.43, 0.10), Vector3(0.66, 0.025, 0.42), mats["shadow"], player_body)
 
-	# Phase 5A.7C: force-load the selected full Quaternius outfit first.
+	# Phase 5A.7E: force-load generated LockedCharacter.tscn first.
 	var imported_player = create_locked_character_instance()
 	if imported_player != null:
 		player_body.add_child(imported_player)

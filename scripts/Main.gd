@@ -64,6 +64,8 @@ var feedback_timer = 0.0
 var asset_catalog = {}
 var asset_mode = "built_in_fallback"
 var locked_asset_warnings = []
+var asset_debug_text = ""
+var selected_character_path = ""
 
 func _ready():
 	randomize()
@@ -155,8 +157,13 @@ func scan_asset_catalog():
 		"character": []
 	}
 	locked_asset_warnings.clear()
+	asset_debug_text = ""
+	selected_character_path = read_selected_player_path()
+	if selected_character_path != "":
+		register_asset("character", selected_character_path)
+		asset_debug_text = "Selected: " + selected_character_path.get_file()
 
-	# Phase 5A.7A: strict, predictable asset order.
+	# Phase 5A.7C: strict, predictable asset order with explicit selected-player path.
 	# 1) User-provided locked packs are highest priority.
 	# 2) Bundled GameBox starter GLBs are fallback assets.
 	# 3) Old random/vendor scan is intentionally avoided for visuals, because it produced ugly/mismatched output.
@@ -174,7 +181,7 @@ func scan_asset_catalog():
 	for key in asset_catalog.keys():
 		asset_catalog[key].sort()
 		total += asset_catalog[key].size()
-	if has_locked_character():
+	if selected_character_path != "" or has_locked_character():
 		asset_mode = "locked_character_pack"
 	elif total > 0:
 		asset_mode = "gamebox_starter_pack"
@@ -185,6 +192,64 @@ func scan_asset_catalog():
 		locked_asset_warnings.append("Drop Quaternius fantasy .glb/.gltf files into assets/gamebox_locked/player/quaternius_fantasy/")
 	else:
 		print("GameBox locked character selected: ", preferred_asset_path("character"))
+
+
+func read_selected_player_path():
+	var marker_paths = [
+		"res://assets/gamebox_locked/player/quaternius_fantasy/SELECTED_PLAYER_PATH.txt",
+		"res://assets/gamebox_locked/player/SELECTED_PLAYER_PATH.txt"
+	]
+	for marker in marker_paths:
+		if FileAccess.file_exists(marker):
+			var text = FileAccess.get_file_as_string(marker).strip_edges()
+			if text != "":
+				text = text.replace("\\", "/")
+				if text.begins_with("res://"):
+					return text
+				return "res://" + text
+	return ""
+
+func try_load_scene_or_mesh(path):
+	if path == "":
+		return null
+	if not ResourceLoader.exists(path):
+		print("GameBox selected character not in ResourceLoader: ", path)
+		return null
+	var res = load(path)
+	if res == null:
+		print("GameBox selected character load returned null: ", path)
+		return null
+	if res is PackedScene:
+		return res.instantiate()
+	if res is Mesh:
+		var m = MeshInstance3D.new()
+		m.mesh = res
+		return m
+	print("GameBox selected character unsupported resource type: ", path, " type=", typeof(res))
+	return null
+
+func create_locked_character_instance():
+	var paths_to_try = []
+	if selected_character_path != "":
+		paths_to_try.append(selected_character_path)
+	if has_asset("character"):
+		for path in asset_catalog["character"]:
+			if not paths_to_try.has(path):
+				paths_to_try.append(path)
+	for path in paths_to_try:
+		var node = try_load_scene_or_mesh(path)
+		if node != null:
+			node.name = "LockedCharacterModel"
+			node.rotation_degrees.y += 180.0
+			fit_visual_model_to_height(node, 1.62, -0.52)
+			asset_mode = "locked_character_loaded"
+			asset_debug_text = "Character: " + path.get_file()
+			print("GameBox locked character loaded: ", path)
+			return node
+	if paths_to_try.size() > 0:
+		asset_debug_text = "Character failed: " + paths_to_try[0].get_file()
+		print("GameBox locked character failed. Tried: ", paths_to_try)
+	return null
 
 func scan_asset_dir(dir_path):
 	var dir = DirAccess.open(dir_path)
@@ -582,9 +647,10 @@ func create_player():
 	player_root.add_child(player_body)
 	add_box("PlayerShadow", Vector3(0, -0.43, 0.10), Vector3(0.66, 0.025, 0.42), mats["shadow"], player_body)
 
-	# Phase 5A.7A: prefer locked Quaternius fantasy/player assets. Fallback remains code-only.
-	var imported_player = instantiate_asset_model("character", player_body, Vector3(0, -0.34, -0.04), Vector3(1.0, 1.0, 1.0), Vector3(0, 180, 0))
+	# Phase 5A.7C: force-load the selected full Quaternius outfit first.
+	var imported_player = create_locked_character_instance()
 	if imported_player != null:
+		player_body.add_child(imported_player)
 		player_head = null
 		player_arm_l = null
 		player_arm_r = null
@@ -878,8 +944,10 @@ func update_camera(delta):
 func update_hud():
 	var score = int(distance_score)
 	hud_label.text = "%s\nScore: %d   Best: %d   Coins: %d\nLane: %d   Speed: %s   Difficulty: %s" % [str(config.get("gameName", "3D Runner")), score, best_score, coins, lane_index + 1, str(config.get("speed", 3)), str(config.get("difficulty", 2))]
-	if asset_mode == "locked_character_pack":
-		hud_label.text += "\nAssets: Locked character pack"
+	if asset_mode == "locked_character_loaded":
+		hud_label.text += "\n" + asset_debug_text
+	elif asset_mode == "locked_character_pack":
+		hud_label.text += "\nAssets: Locked pack found • " + asset_debug_text
 	elif asset_mode == "gamebox_starter_pack":
 		hud_label.text += "\nAssets: GameBox starter pack"
 	elif locked_asset_warnings.size() > 0:

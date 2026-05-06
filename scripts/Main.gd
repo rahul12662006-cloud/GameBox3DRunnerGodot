@@ -1,7 +1,7 @@
 extends Node3D
 
 # GameBox 3D Runner - Android-safe real 3D prototype.
-# Phase 5A.7A: locked asset pipeline for real model packs + safe fallback.
+# Phase 5A.7B: locked Quaternius outfit path fix + safe fallback.
 
 const LANES = [-1.65, 0.0, 1.65]
 const PLAYER_Z = 3.2
@@ -183,6 +183,8 @@ func scan_asset_catalog():
 	print("GameBox asset mode: ", asset_mode, " models=", total)
 	if not has_locked_character():
 		locked_asset_warnings.append("Drop Quaternius fantasy .glb/.gltf files into assets/gamebox_locked/player/quaternius_fantasy/")
+	else:
+		print("GameBox locked character selected: ", preferred_asset_path("character"))
 
 func scan_asset_dir(dir_path):
 	var dir = DirAccess.open(dir_path)
@@ -250,11 +252,32 @@ func preferred_asset_path(key):
 	if not has_asset(key):
 		return ""
 	var paths = asset_catalog[key]
-	# Locked assets first, then starter pack. For character, avoid random pick for stable builds.
+	if key == "character":
+		var preferred_names = [
+			"outfits/male_ranger.gltf",
+			"outfits/male_peasant.gltf",
+			"outfits/female_ranger.gltf",
+			"outfits/female_peasant.gltf"
+		]
+		for wanted in preferred_names:
+			for path in paths:
+				var lower = str(path).to_lower().replace("\\", "/")
+				if lower.find(wanted) >= 0:
+					return path
+		# Avoid modular body parts as player models when possible.
+		for path in paths:
+			var lower = str(path).to_lower().replace("\\", "/")
+			if lower.find("/outfits/") >= 0:
+				return path
+		for path in paths:
+			if str(path).find("gamebox_locked") >= 0:
+				return path
+		return paths[0]
+	# Locked assets first, then starter pack.
 	for path in paths:
 		if str(path).find("gamebox_locked") >= 0:
 			return path
-	return paths[0] if key == "character" else paths.pick_random()
+	return paths.pick_random()
 
 func instantiate_asset_model(key, parent, pos := Vector3.ZERO, scale_value := Vector3.ONE, rot_degrees := Vector3.ZERO):
 	if not has_asset(key):
@@ -280,7 +303,10 @@ func instantiate_asset_model(key, parent, pos := Vector3.ZERO, scale_value := Ve
 	node.rotation_degrees = rot_degrees
 	parent.add_child(node)
 	if key == "character":
-		fit_visual_model_to_height(node, 1.26, -0.42)
+		# Quaternius outfits face direction/scale can vary; normalize after import.
+		node.rotation_degrees.y += 180.0
+		fit_visual_model_to_height(node, 1.52, -0.50)
+		print("GameBox character model loaded: ", path)
 	return node
 
 func fit_visual_model_to_height(node, target_height, bottom_y):

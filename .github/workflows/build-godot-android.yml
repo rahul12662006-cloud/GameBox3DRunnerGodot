@@ -54,6 +54,7 @@ jobs:
         run: |
           git lfs install
           git lfs pull
+          ls -lh assets/imported_packs || true
 
       - name: Prepare locked game assets
         run: |

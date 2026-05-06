@@ -53,28 +53,50 @@ if [[ -f "${zip_path}" ]]; then
   unzip -q -o "${zip_path}" -d "${CACHE_DIR}/quaternius_fantasy"
 
   # Clean previously extracted dynamic files but keep README/.gitkeep.
-  find "${PLAYER_DIR}" -maxdepth 1 -type f \( -iname '*.glb' -o -iname '*.gltf' -o -iname '*.bin' -o -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' \) -delete
+  find "${PLAYER_DIR}" -mindepth 1 ! -name '.gitkeep' -exec rm -rf {} + 2>/dev/null || true
+  mkdir -p "${PLAYER_DIR}/quaternius_extracted"
 
-  # Copy a limited stable set to keep APK size reasonable.
-  while IFS= read -r -d '' file; do
-    base="$(basename "$file")"
-    lower="$(printf '%s' "$base" | tr '[:upper:]' '[:lower:]')"
-    # Prefer real model-looking files and avoid huge preview/sample files when names expose that.
-    if [[ "$lower" == *preview* || "$lower" == *thumbnail* ]]; then
-      continue
-    fi
-    safe_name="$(printf '%s' "$base" | tr ' ' '_' | tr -cd '[:alnum:]_.-')"
-    cp -f "$file" "${PLAYER_DIR}/${safe_name}"
-    count=$((count + 1))
-    if [[ "$count" -ge 12 ]]; then
+  # IMPORTANT:
+  # Copy the full Godot glTF export folder, not random first files.
+  # Quaternius glTF outfits depend on sibling folders/materials. Randomly copying 12 files caused fallback/parts only.
+  gltf_root=""
+  while IFS= read -r -d '' d; do
+    if [[ "$d" == *"Exports/glTF (Godot-Unreal)"* ]]; then
+      gltf_root="$d"
       break
     fi
-  done < <(find "${CACHE_DIR}/quaternius_fantasy" -type f \( -iname '*.glb' -o -iname '*.gltf' \) -print0)
+  done < <(find "${CACHE_DIR}/quaternius_fantasy" -type d -print0)
 
-  # If glTF files reference .bin/textures next to them, copy nearby support files too.
-  while IFS= read -r -d '' file; do
-    cp -f "$file" "${PLAYER_DIR}/$(basename "$file")" || true
-  done < <(find "${CACHE_DIR}/quaternius_fantasy" -type f \( -iname '*.bin' -o -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' \) -print0 | head -z -n 60)
+  if [[ -n "${gltf_root}" && -d "${gltf_root}" ]]; then
+    echo "Using Quaternius Godot glTF root: ${gltf_root}"
+    cp -R "${gltf_root}/." "${PLAYER_DIR}/quaternius_extracted/"
+    count=$(find "${PLAYER_DIR}/quaternius_extracted" -type f \( -iname '*.glb' -o -iname '*.gltf' \) | wc -l | tr -d ' ')
+  else
+    echo "Godot glTF root not found. Falling back to direct glTF extraction."
+    while IFS= read -r -d '' file; do
+      rel="${file#${CACHE_DIR}/quaternius_fantasy/}"
+      mkdir -p "${PLAYER_DIR}/quaternius_extracted/$(dirname "$rel")"
+      cp -f "$file" "${PLAYER_DIR}/quaternius_extracted/$rel"
+      count=$((count + 1))
+    done < <(find "${CACHE_DIR}/quaternius_fantasy" -type f \( -iname '*.glb' -o -iname '*.gltf' -o -iname '*.bin' -o -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' \) -print0)
+  fi
+
+  preferred=""
+  for name in "Male_Ranger.gltf" "Male_Peasant.gltf" "Female_Ranger.gltf" "Female_Peasant.gltf"; do
+    candidate=$(find "${PLAYER_DIR}/quaternius_extracted" -type f -iname "$name" | head -n 1 || true)
+    if [[ -n "$candidate" ]]; then
+      preferred="$candidate"
+      break
+    fi
+  done
+  if [[ -n "$preferred" ]]; then
+    rel_pref="${preferred#${ROOT_DIR}/}"
+    echo "Selected Quaternius player: ${rel_pref}"
+    printf '%s\n' "$rel_pref" > "${PLAYER_DIR}/SELECTED_PLAYER_PATH.txt"
+  else
+    echo "No full outfit file found; expected Outfits/Male_Ranger.gltf etc."
+  fi
+
   source_pack="quaternius_fantasy_zip"
 else
   echo "No assets/imported_packs/quaternius_fantasy.zip found. Build will use GameBox starter/fallback player."
@@ -91,7 +113,7 @@ fi
 
 cat > "${MANIFEST}" <<JSON
 {
-  "phase": "5A.7A",
+  "phase": "5A.7B",
   "sourcePack": "${source_pack}",
   "playerModelsInstalled": ${count},
   "lockedPlayerFolder": "assets/gamebox_locked/player/quaternius_fantasy"

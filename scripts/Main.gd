@@ -1,7 +1,7 @@
 extends Node3D
 
 # GameBox 3D Runner - Android-safe real 3D prototype.
-# Phase 5A.8: locked character animation/pose polish + safe fallback.
+# Phase 5A.8.1: upright character safety fix + safe motion fallback.
 
 const LANES = [-1.65, 0.0, 1.65]
 const PLAYER_Z = 3.2
@@ -255,24 +255,21 @@ func create_locked_character_instance():
 
 
 func prepare_imported_character_visual(model):
-	# Phase 5A.8: Make imported Quaternius characters feel like runners instead of frozen T-pose models.
+	# Phase 5A.8.1 safety fix: keep the imported Quaternius outfit upright.
+	# The pack skeleton bone axes vary by export, so direct bone-pose edits can flip the
+	# full character upside-down. For now we do NOT touch the skeleton. We keep the
+	# real character mesh upright and use parent/body bob + lane lean for motion feel.
 	imported_player_model = model
-	imported_skeleton = find_first_skeleton(model)
+	imported_skeleton = null
 	imported_bones = {}
 	imported_pose_ready = false
 	imported_overlay_mode = false
-	if imported_skeleton != null:
-		map_imported_bones(imported_skeleton)
-		imported_pose_ready = imported_bones.size() >= 4
-		print("GameBox imported skeleton bones mapped: ", imported_bones)
-	if not imported_pose_ready:
-		# Some Quaternius outfit glTFs export as mostly-static mesh parts. Hide wide arms if possible
-		# and add lightweight procedural arms/legs so it no longer looks like a T-pose statue.
-		hide_static_arm_meshes(model)
-		create_imported_overlay_limbs()
-		asset_debug_text = "Character: LockedCharacter.tscn • overlay pose"
-	else:
-		asset_debug_text = "Character: LockedCharacter.tscn • animated pose"
+	imported_overlay_arm_l = null
+	imported_overlay_arm_r = null
+	imported_overlay_leg_l = null
+	imported_overlay_leg_r = null
+	asset_debug_text = "Character: LockedCharacter.tscn • safe upright"
+	print("GameBox character loaded in safe upright mode; skeleton animation disabled to avoid flip.")
 
 func find_first_skeleton(node):
 	if node is Skeleton3D:
@@ -347,35 +344,15 @@ func set_imported_bone_pose(key, x, y, z):
 func animate_imported_character(delta):
 	if imported_player_model == null:
 		return
-	var swing = sin(run_cycle)
-	var swing2 = sin(run_cycle + PI)
-	var grounded_power = 1.0 if on_ground and slide_timer <= 0.0 else 0.30
-	var lane_lean = clamp(player_body.rotation_degrees.z, -16.0, 16.0)
-	if imported_pose_ready and imported_skeleton != null:
-		# Bring T-pose arms down and add arcade runner motion. Bone axes vary by asset,
-		# so rotations are conservative to avoid destroying the mesh.
-		set_imported_bone_pose("spine", 0.0, 0.0, lane_lean * 0.25)
-		set_imported_bone_pose("head", 0.0, 0.0, -lane_lean * 0.15)
-		set_imported_bone_pose("arm_l", swing * 18.0 * grounded_power, 0.0, 72.0)
-		set_imported_bone_pose("arm_r", swing2 * 18.0 * grounded_power, 0.0, -72.0)
-		set_imported_bone_pose("forearm_l", 8.0 + swing2 * 12.0 * grounded_power, 0.0, 10.0)
-		set_imported_bone_pose("forearm_r", 8.0 + swing * 12.0 * grounded_power, 0.0, -10.0)
-		set_imported_bone_pose("leg_l", swing2 * 22.0 * grounded_power, 0.0, 0.0)
-		set_imported_bone_pose("leg_r", swing * 22.0 * grounded_power, 0.0, 0.0)
-		set_imported_bone_pose("shin_l", max(0.0, swing) * 18.0 * grounded_power, 0.0, 0.0)
-		set_imported_bone_pose("shin_r", max(0.0, swing2) * 18.0 * grounded_power, 0.0, 0.0)
-	else:
-		# Static-mesh fallback pose: our overlay arms/legs run while imported torso remains visible.
-		var arm_amount = 30.0 * grounded_power
-		var leg_amount = 24.0 * grounded_power
-		if imported_overlay_arm_l:
-			imported_overlay_arm_l.rotation_degrees.x = lerp(imported_overlay_arm_l.rotation_degrees.x, swing * arm_amount, min(delta * 12.0, 1.0))
-		if imported_overlay_arm_r:
-			imported_overlay_arm_r.rotation_degrees.x = lerp(imported_overlay_arm_r.rotation_degrees.x, swing2 * arm_amount, min(delta * 12.0, 1.0))
-		if imported_overlay_leg_l:
-			imported_overlay_leg_l.rotation_degrees.x = lerp(imported_overlay_leg_l.rotation_degrees.x, swing2 * leg_amount, min(delta * 12.0, 1.0))
-		if imported_overlay_leg_r:
-			imported_overlay_leg_r.rotation_degrees.x = lerp(imported_overlay_leg_r.rotation_degrees.x, swing * leg_amount, min(delta * 12.0, 1.0))
+	# Phase 5A.8.1: Do not rotate imported bones. Keep the model upright and add only
+	# subtle root motion. The visible movement still comes from player_body bob/lean.
+	# This prevents upside-down / folded character bugs on Android exports.
+	imported_player_model.rotation_degrees.x = lerp(imported_player_model.rotation_degrees.x, 0.0, min(delta * 14.0, 1.0))
+	imported_player_model.rotation_degrees.z = lerp(imported_player_model.rotation_degrees.z, 0.0, min(delta * 14.0, 1.0))
+	# Keep model forward-facing relative to the road. The parent handles lane lean.
+	# A tiny vertical pulse gives life without touching the skeleton.
+	var pulse = 0.018 * abs(sin(run_cycle)) if on_ground and slide_timer <= 0.0 else 0.0
+	imported_player_model.position.y = lerp(imported_player_model.position.y, pulse, min(delta * 10.0, 1.0))
 
 
 func scan_asset_dir(dir_path):

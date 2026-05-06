@@ -1,7 +1,7 @@
 extends Node3D
 
 # GameBox 3D Runner - Android-safe real 3D prototype.
-# Phase 5A.7B: locked Quaternius outfit path fix + safe fallback.
+# Phase 5A.7D: deterministic locked Quaternius active outfit loading + safe fallback.
 
 const LANES = [-1.65, 0.0, 1.65]
 const PLAYER_Z = 3.2
@@ -161,13 +161,14 @@ func scan_asset_catalog():
 	selected_character_path = read_selected_player_path()
 	if selected_character_path != "":
 		register_asset("character", selected_character_path)
-		asset_debug_text = "Selected: " + selected_character_path.get_file()
+		asset_debug_text = "Selected path: " + selected_character_path.get_file()
 
 	# Phase 5A.7C: strict, predictable asset order with explicit selected-player path.
 	# 1) User-provided locked packs are highest priority.
 	# 2) Bundled GameBox starter GLBs are fallback assets.
 	# 3) Old random/vendor scan is intentionally avoided for visuals, because it produced ugly/mismatched output.
 	var roots = [
+		"res://assets/gamebox_locked/player/quaternius_fantasy/active",
 		"res://assets/gamebox_locked/player/quaternius_fantasy",
 		"res://assets/gamebox_locked/obstacles",
 		"res://assets/gamebox_locked/environment",
@@ -197,6 +198,7 @@ func scan_asset_catalog():
 func read_selected_player_path():
 	var marker_paths = [
 		"res://assets/gamebox_locked/player/quaternius_fantasy/SELECTED_PLAYER_PATH.txt",
+		"res://assets/gamebox_locked/player/quaternius_fantasy/active/SELECTED_PLAYER_PATH.txt",
 		"res://assets/gamebox_locked/player/SELECTED_PLAYER_PATH.txt"
 	]
 	for marker in marker_paths:
@@ -212,9 +214,8 @@ func read_selected_player_path():
 func try_load_scene_or_mesh(path):
 	if path == "":
 		return null
-	if not ResourceLoader.exists(path):
-		print("GameBox selected character not in ResourceLoader: ", path)
-		return null
+	# Do not hard-fail on ResourceLoader.exists(); exported generated glTF files can be loadable
+	# even when exists() is unreliable during Android export.
 	var res = load(path)
 	if res == null:
 		print("GameBox selected character load returned null: ", path)
@@ -319,6 +320,10 @@ func preferred_asset_path(key):
 	var paths = asset_catalog[key]
 	if key == "character":
 		var preferred_names = [
+			"active/outfits/male_ranger.gltf",
+			"active/outfits/male_peasant.gltf",
+			"active/outfits/female_ranger.gltf",
+			"active/outfits/female_peasant.gltf",
 			"outfits/male_ranger.gltf",
 			"outfits/male_peasant.gltf",
 			"outfits/female_ranger.gltf",

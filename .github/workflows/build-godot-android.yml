@@ -59,8 +59,9 @@ jobs:
       - name: Prepare locked game assets
         run: |
           set -e
-          bash tools/install_cc0_assets.sh || true
-          find assets -maxdepth 6 -type f | sed 's#^#asset: #' | head -140
+          bash tools/install_cc0_assets.sh
+          find assets/gamebox_locked/player/quaternius_fantasy -maxdepth 4 -type f | sed 's#^#locked-player: #' | head -160
+          find assets -maxdepth 6 -type f | sed 's#^#asset: #' | head -220
 
       - name: Export Android debug APK
         run: |

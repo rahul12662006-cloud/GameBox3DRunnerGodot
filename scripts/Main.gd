@@ -1,7 +1,7 @@
 extends Node3D
 
 # GameBox 3D Runner - Android-safe real 3D prototype.
-# Phase 5A.7E: generated wrapper scene locked character loading + safe fallback.
+# Phase 5A.8: locked character animation/pose polish + safe fallback.
 
 const LANES = [-1.65, 0.0, 1.65]
 const PLAYER_Z = 3.2
@@ -66,6 +66,15 @@ var asset_mode = "built_in_fallback"
 var locked_asset_warnings = []
 var asset_debug_text = ""
 var selected_character_path = ""
+var imported_player_model = null
+var imported_skeleton = null
+var imported_bones = {}
+var imported_pose_ready = false
+var imported_overlay_arm_l = null
+var imported_overlay_arm_r = null
+var imported_overlay_leg_l = null
+var imported_overlay_leg_r = null
+var imported_overlay_mode = false
 
 func _ready():
 	randomize()
@@ -234,6 +243,7 @@ func create_locked_character_instance():
 			node.name = "LockedCharacterModel"
 			node.rotation_degrees.y += 180.0
 			fit_visual_model_to_height(node, 1.62, -0.52)
+			prepare_imported_character_visual(node)
 			asset_mode = "locked_character_loaded"
 			asset_debug_text = "Character: " + path.get_file()
 			print("GameBox locked character loaded: ", path)
@@ -242,6 +252,131 @@ func create_locked_character_instance():
 		asset_debug_text = "Character failed: " + paths_to_try[0].get_file()
 		print("GameBox locked character failed. Tried: ", paths_to_try)
 	return null
+
+
+func prepare_imported_character_visual(model):
+	# Phase 5A.8: Make imported Quaternius characters feel like runners instead of frozen T-pose models.
+	imported_player_model = model
+	imported_skeleton = find_first_skeleton(model)
+	imported_bones = {}
+	imported_pose_ready = false
+	imported_overlay_mode = false
+	if imported_skeleton != null:
+		map_imported_bones(imported_skeleton)
+		imported_pose_ready = imported_bones.size() >= 4
+		print("GameBox imported skeleton bones mapped: ", imported_bones)
+	if not imported_pose_ready:
+		# Some Quaternius outfit glTFs export as mostly-static mesh parts. Hide wide arms if possible
+		# and add lightweight procedural arms/legs so it no longer looks like a T-pose statue.
+		hide_static_arm_meshes(model)
+		create_imported_overlay_limbs()
+		asset_debug_text = "Character: LockedCharacter.tscn • overlay pose"
+	else:
+		asset_debug_text = "Character: LockedCharacter.tscn • animated pose"
+
+func find_first_skeleton(node):
+	if node is Skeleton3D:
+		return node
+	for child in node.get_children():
+		var found = find_first_skeleton(child)
+		if found != null:
+			return found
+	return null
+
+func map_imported_bones(skel):
+	imported_bones.clear()
+	for i in range(skel.get_bone_count()):
+		var n = skel.get_bone_name(i).to_lower()
+		var compact = n.replace(" ", "").replace("_", "").replace("-", "")
+		var is_left = compact.find("left") >= 0 or compact.find(" l") >= 0 or compact.ends_with("l") or compact.find(".l") >= 0
+		var is_right = compact.find("right") >= 0 or compact.find(" r") >= 0 or compact.ends_with("r") or compact.find(".r") >= 0
+		if compact.find("head") >= 0 and not imported_bones.has("head"):
+			imported_bones["head"] = i
+		elif (compact.find("spine") >= 0 or compact.find("chest") >= 0 or compact.find("torso") >= 0) and not imported_bones.has("spine"):
+			imported_bones["spine"] = i
+		elif (compact.find("upperarm") >= 0 or (compact.find("arm") >= 0 and compact.find("fore") < 0 and compact.find("lower") < 0)):
+			if is_left and not imported_bones.has("arm_l"):
+				imported_bones["arm_l"] = i
+			elif is_right and not imported_bones.has("arm_r"):
+				imported_bones["arm_r"] = i
+		elif (compact.find("forearm") >= 0 or compact.find("lowerarm") >= 0):
+			if is_left and not imported_bones.has("forearm_l"):
+				imported_bones["forearm_l"] = i
+			elif is_right and not imported_bones.has("forearm_r"):
+				imported_bones["forearm_r"] = i
+		elif (compact.find("thigh") >= 0 or compact.find("upperleg") >= 0 or compact.find("upleg") >= 0):
+			if is_left and not imported_bones.has("leg_l"):
+				imported_bones["leg_l"] = i
+			elif is_right and not imported_bones.has("leg_r"):
+				imported_bones["leg_r"] = i
+		elif (compact.find("shin") >= 0 or compact.find("calf") >= 0 or (compact.find("leg") >= 0 and compact.find("upper") < 0)):
+			if is_left and not imported_bones.has("shin_l"):
+				imported_bones["shin_l"] = i
+			elif is_right and not imported_bones.has("shin_r"):
+				imported_bones["shin_r"] = i
+
+func hide_static_arm_meshes(node):
+	var lower = node.name.to_lower()
+	if node is MeshInstance3D:
+		if lower.find("arm") >= 0 or lower.find("pauldron") >= 0 or lower.find("shoulder") >= 0:
+			node.visible = false
+	for child in node.get_children():
+		hide_static_arm_meshes(child)
+
+func create_imported_overlay_limbs():
+	if player_body == null:
+		return
+	var arm_mat = make_mat(Color(0.20, 0.42, 0.25))
+	var boot_mat = make_mat(Color(0.09, 0.07, 0.08))
+	imported_overlay_arm_l = add_box("OverlayArmL", Vector3(-0.36, 0.36, 0.02), Vector3(0.07, 0.44, 0.08), arm_mat, player_body)
+	imported_overlay_arm_r = add_box("OverlayArmR", Vector3(0.36, 0.36, 0.02), Vector3(0.07, 0.44, 0.08), arm_mat, player_body)
+	imported_overlay_leg_l = add_box("OverlayLegL", Vector3(-0.13, -0.36, 0.03), Vector3(0.08, 0.44, 0.08), boot_mat, player_body)
+	imported_overlay_leg_r = add_box("OverlayLegR", Vector3(0.13, -0.36, 0.03), Vector3(0.08, 0.44, 0.08), boot_mat, player_body)
+	imported_overlay_mode = true
+
+func quat_from_euler_deg(x, y, z):
+	return Basis.from_euler(Vector3(deg_to_rad(x), deg_to_rad(y), deg_to_rad(z))).get_rotation_quaternion()
+
+func set_imported_bone_pose(key, x, y, z):
+	if imported_skeleton == null or not imported_bones.has(key):
+		return
+	var idx = int(imported_bones[key])
+	if idx >= 0 and idx < imported_skeleton.get_bone_count():
+		imported_skeleton.set_bone_pose_rotation(idx, quat_from_euler_deg(x, y, z))
+
+func animate_imported_character(delta):
+	if imported_player_model == null:
+		return
+	var swing = sin(run_cycle)
+	var swing2 = sin(run_cycle + PI)
+	var grounded_power = 1.0 if on_ground and slide_timer <= 0.0 else 0.30
+	var lane_lean = clamp(player_body.rotation_degrees.z, -16.0, 16.0)
+	if imported_pose_ready and imported_skeleton != null:
+		# Bring T-pose arms down and add arcade runner motion. Bone axes vary by asset,
+		# so rotations are conservative to avoid destroying the mesh.
+		set_imported_bone_pose("spine", 0.0, 0.0, lane_lean * 0.25)
+		set_imported_bone_pose("head", 0.0, 0.0, -lane_lean * 0.15)
+		set_imported_bone_pose("arm_l", swing * 18.0 * grounded_power, 0.0, 72.0)
+		set_imported_bone_pose("arm_r", swing2 * 18.0 * grounded_power, 0.0, -72.0)
+		set_imported_bone_pose("forearm_l", 8.0 + swing2 * 12.0 * grounded_power, 0.0, 10.0)
+		set_imported_bone_pose("forearm_r", 8.0 + swing * 12.0 * grounded_power, 0.0, -10.0)
+		set_imported_bone_pose("leg_l", swing2 * 22.0 * grounded_power, 0.0, 0.0)
+		set_imported_bone_pose("leg_r", swing * 22.0 * grounded_power, 0.0, 0.0)
+		set_imported_bone_pose("shin_l", max(0.0, swing) * 18.0 * grounded_power, 0.0, 0.0)
+		set_imported_bone_pose("shin_r", max(0.0, swing2) * 18.0 * grounded_power, 0.0, 0.0)
+	else:
+		# Static-mesh fallback pose: our overlay arms/legs run while imported torso remains visible.
+		var arm_amount = 30.0 * grounded_power
+		var leg_amount = 24.0 * grounded_power
+		if imported_overlay_arm_l:
+			imported_overlay_arm_l.rotation_degrees.x = lerp(imported_overlay_arm_l.rotation_degrees.x, swing * arm_amount, min(delta * 12.0, 1.0))
+		if imported_overlay_arm_r:
+			imported_overlay_arm_r.rotation_degrees.x = lerp(imported_overlay_arm_r.rotation_degrees.x, swing2 * arm_amount, min(delta * 12.0, 1.0))
+		if imported_overlay_leg_l:
+			imported_overlay_leg_l.rotation_degrees.x = lerp(imported_overlay_leg_l.rotation_degrees.x, swing2 * leg_amount, min(delta * 12.0, 1.0))
+		if imported_overlay_leg_r:
+			imported_overlay_leg_r.rotation_degrees.x = lerp(imported_overlay_leg_r.rotation_degrees.x, swing * leg_amount, min(delta * 12.0, 1.0))
+
 
 func scan_asset_dir(dir_path):
 	var dir = DirAccess.open(dir_path)
@@ -854,6 +989,7 @@ func update_player(delta):
 	if player_head:
 		player_head.position.y = 0.96 + run_bob * 0.45
 	animate_runner_limbs(delta)
+	animate_imported_character(delta)
 	update_runner_trails(delta)
 
 func animate_runner_limbs(delta):

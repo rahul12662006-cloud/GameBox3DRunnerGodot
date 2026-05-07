@@ -1,7 +1,7 @@
 extends Node3D
 
 # GameBox 3D Runner - Android-safe real 3D prototype.
-# Phase 5A.10.1: Slide animation safety + next gameplay polish.
+# Phase 5A.10.2: Hard slide visual fix - no skeleton slide retarget, no image generation.
 
 const LANES = [-1.65, 0.0, 1.65]
 const PLAYER_Z = 3.2
@@ -84,6 +84,8 @@ var imported_slide_animation = ""
 var imported_current_anim = ""
 var imported_run_speed_multiplier = 2.25
 var imported_walk_as_run = false
+var slide_visual_root = null
+var slide_visual_trails = []
 var last_spawn_lane = 1
 var lane_change_flash_timer = 0.0
 var combo_bonus = 0
@@ -960,6 +962,7 @@ func create_player():
 			var trail = add_box("RunTrail", Vector3(0, 0.05, 0.35 + float(i) * 0.20), Vector3(0.06, 0.028, 0.20), mats["road_side"], player_body)
 			trail.visible = false
 			player_trail_nodes.append(trail)
+		create_hard_slide_visual()
 		return
 
 	add_capsule("Torso", Vector3(0, 0.38, 0), 0.20, 0.74, mats["player"], player_body)
@@ -978,6 +981,48 @@ func create_player():
 		var trail = add_box("RunTrail", Vector3(0, 0.05, 0.35 + float(i) * 0.20), Vector3(0.06, 0.028, 0.20), mats["road_side"], player_body)
 		trail.visible = false
 		player_trail_nodes.append(trail)
+
+func create_hard_slide_visual():
+	# Phase 5A.10.2: the Quaternius outfit retargets run nicely but generic slide/crouch
+	# clips distort the rig. During slide we hide the humanoid model and show a clean,
+	# low-profile slide silhouette. Gameplay hitbox still uses slide_timer, so gates work.
+	slide_visual_root = Node3D.new()
+	slide_visual_root.name = "HardSlideVisual"
+	slide_visual_root.visible = false
+	player_body.add_child(slide_visual_root)
+	slide_visual_trails.clear()
+	add_box("SlideShadow", Vector3(0.0, -0.44, 0.02), Vector3(0.82, 0.025, 0.68), mats["shadow"], slide_visual_root)
+	var slide_body = add_capsule("SlideBody", Vector3(0.0, -0.18, -0.08), 0.20, 0.82, mats["player"], slide_visual_root)
+	slide_body.rotation_degrees.x = 90.0
+	var slide_chest = add_box("SlideChest", Vector3(0.0, -0.14, -0.10), Vector3(0.42, 0.16, 0.30), mats["player_light"], slide_visual_root)
+	slide_chest.rotation_degrees.x = -8.0
+	add_sphere("SlideHead", Vector3(0.0, -0.10, -0.55), Vector3(0.18, 0.18, 0.18), mats["player_light"], slide_visual_root)
+	add_box("SlideArmL", Vector3(-0.30, -0.17, -0.12), Vector3(0.08, 0.08, 0.48), mats["player_dark"], slide_visual_root)
+	add_box("SlideArmR", Vector3(0.30, -0.17, -0.12), Vector3(0.08, 0.08, 0.48), mats["player_dark"], slide_visual_root)
+	add_box("SlideLegL", Vector3(-0.12, -0.26, 0.34), Vector3(0.10, 0.08, 0.45), mats["shoe"], slide_visual_root)
+	add_box("SlideLegR", Vector3(0.12, -0.26, 0.34), Vector3(0.10, 0.08, 0.45), mats["shoe"], slide_visual_root)
+	for i in range(4):
+		var streak = add_box("SlideSpeedStreak%d" % i, Vector3((float(i) - 1.5) * 0.17, -0.25, 0.58 + float(i) * 0.14), Vector3(0.035, 0.025, 0.32), mats["road_side"], slide_visual_root)
+		streak.visible = true
+		slide_visual_trails.append(streak)
+
+func update_hard_slide_visual(delta):
+	if slide_visual_root == null:
+		return
+	var active = slide_timer > 0.0 and imported_player_model != null
+	slide_visual_root.visible = active
+	if imported_player_model != null:
+		imported_player_model.visible = not active
+	if active:
+		slide_visual_root.position.y = lerp(slide_visual_root.position.y, 0.0, min(delta * 18.0, 1.0))
+		slide_visual_root.rotation_degrees.x = lerp(slide_visual_root.rotation_degrees.x, -3.0, min(delta * 18.0, 1.0))
+		slide_visual_root.rotation_degrees.z = lerp(slide_visual_root.rotation_degrees.z, sin(run_cycle * 0.65) * 2.0, min(delta * 14.0, 1.0))
+		for i in range(slide_visual_trails.size()):
+			var streak = slide_visual_trails[i]
+			if is_instance_valid(streak):
+				streak.position.z = 0.58 + float(i) * 0.16 + fmod(run_cycle * 0.06, 0.18)
+	else:
+		slide_visual_root.rotation_degrees = slide_visual_root.rotation_degrees.lerp(Vector3.ZERO, min(delta * 10.0, 1.0))
 
 func create_camera():
 	camera = Camera3D.new()
@@ -1148,24 +1193,31 @@ func update_player(delta):
 
 	if slide_timer > 0.0:
 		slide_timer -= delta
-		# Phase 5A.10.1: imported humanoid models look broken when their whole Y scale
-		# is crushed. Keep them upright/full height and create a slide feel by lowering
-		# the root plus a safe forward lean in animate_imported_character(). The gameplay
-		# slide hitbox still uses slide_timer, so gates remain passable.
+		# Phase 5A.10.2: hard slide visual. The real Quaternius character stays hidden
+		# during slide to avoid broken crouch retargeting, and a stable low slide model
+		# shows instead. The gameplay hitbox still uses slide_timer for gates.
 		if imported_player_model != null:
 			player_body.scale.y = lerp(player_body.scale.y, 1.0, min(delta * 16.0, 1.0))
-			player_body.position.y = lerp(player_body.position.y, -0.33, min(delta * 16.0, 1.0))
+			player_body.position.y = lerp(player_body.position.y, run_bob * 0.35, min(delta * 16.0, 1.0))
 		else:
 			player_body.scale.y = lerp(player_body.scale.y, 0.62, min(delta * 16.0, 1.0))
 			player_body.position.y = lerp(player_body.position.y, -0.16, min(delta * 16.0, 1.0))
 	else:
+		if imported_player_model != null:
+			imported_player_model.visible = true
+		if slide_visual_root != null:
+			slide_visual_root.visible = false
 		player_body.scale.y = lerp(player_body.scale.y, 1.0, min(delta * 14.0, 1.0))
 		player_body.position.y = lerp(player_body.position.y, run_bob, min(delta * 14.0, 1.0))
+	update_hard_slide_visual(delta)
 
 	var lane_lean = clamp(-lane_velocity * 4.0, -13.0, 13.0)
 	player_body.rotation_degrees.z = lerp(player_body.rotation_degrees.z, lane_lean, min(delta * 8.0, 1.0))
 	player_body.rotation_degrees.y = sin(run_cycle * 0.9) * 2.4
-	player_body.rotation_degrees.x = lerp(player_body.rotation_degrees.x, -13.0 if slide_timer > 0.0 else 0.0, min(delta * 9.0, 1.0))
+	var slide_root_pitch = 0.0
+	if slide_timer > 0.0 and imported_player_model == null:
+		slide_root_pitch = -13.0
+	player_body.rotation_degrees.x = lerp(player_body.rotation_degrees.x, slide_root_pitch, min(delta * 9.0, 1.0))
 	if player_head:
 		player_head.position.y = 0.96 + run_bob * 0.45
 	animate_runner_limbs(delta)
@@ -1479,7 +1531,7 @@ func slide():
 	if is_game_over or is_paused:
 		return
 	if on_ground:
-		slide_timer = 0.72
+		slide_timer = 0.78
 		show_feedback("Slide")
 
 func _unhandled_input(event):

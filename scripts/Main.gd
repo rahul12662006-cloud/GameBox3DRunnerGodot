@@ -1,7 +1,7 @@
 extends Node3D
 
 # GameBox 3D Runner - Android-safe real 3D prototype.
-# Phase 5A.12: Fantasy Temple visual reset - no image generation, code patch only.
+# Phase 5A.13: Temple Runner polish - readability, camera, obstacles, UI. Code patch only.
 
 const LANES = [-1.65, 0.0, 1.65]
 const PLAYER_Z = 3.2
@@ -90,7 +90,7 @@ var last_spawn_lane = 1
 var lane_change_flash_timer = 0.0
 var combo_bonus = 0
 var near_miss_timer = 0.0
-var camera_base_fov = 72.0
+var camera_base_fov = 66.0
 
 func _ready():
 	randomize()
@@ -765,6 +765,13 @@ func create_materials():
 	mats["torch_fire"] = make_mat(Color(1.0, 0.43, 0.10), true, 1.85)
 	mats["torch_core"] = make_mat(Color(1.0, 0.86, 0.28), true, 2.15)
 	mats["gem"] = make_mat(Color(0.14, 0.95, 0.72), true, 1.0)
+	mats["stone_edge"] = make_mat(Color(0.235, 0.190, 0.135))
+	mats["stone_highlight"] = make_mat(Color(0.52, 0.40, 0.25))
+	mats["wood"] = make_mat(Color(0.31, 0.16, 0.075))
+	mats["wood_light"] = make_mat(Color(0.56, 0.32, 0.14))
+	mats["spike"] = make_mat(Color(0.78, 0.70, 0.54))
+	mats["banner"] = make_mat(Color(0.44, 0.10, 0.075))
+	mats["banner_gold"] = make_mat(Color(1.0, 0.70, 0.20), true, 0.28)
 
 func make_mat(color, emission_enabled := false, emission_energy := 0.0):
 	var mat = StandardMaterial3D.new()
@@ -812,33 +819,33 @@ func create_world():
 	var env = WorldEnvironment.new()
 	var e = Environment.new()
 	e.background_mode = Environment.BG_COLOR
-	# Fantasy temple: warm dusk/ruins palette instead of grey block city.
-	e.background_color = Color(0.105, 0.085, 0.062)
+	# Phase 5A.13: warmer, clearer temple palette with less empty brown sky.
+	e.background_color = Color(0.135, 0.098, 0.062)
 	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	e.ambient_light_color = Color(0.82, 0.62, 0.43)
-	e.ambient_light_energy = 1.24
+	e.ambient_light_color = Color(0.95, 0.70, 0.45)
+	e.ambient_light_energy = 1.45
 	e.fog_enabled = true
-	e.fog_density = 0.0068
-	e.fog_light_color = Color(0.33, 0.24, 0.16)
+	e.fog_density = 0.0048
+	e.fog_light_color = Color(0.45, 0.32, 0.18)
 	env.environment = e
 	add_child(env)
 	RenderingServer.set_default_clear_color(e.background_color)
 
 	var sun = DirectionalLight3D.new()
-	sun.light_energy = 3.85
+	sun.light_energy = 4.35
 	sun.light_color = Color(1.0, 0.82, 0.56)
 	sun.rotation_degrees = Vector3(-48, -22, 0)
 	add_child(sun)
 	var fill = OmniLight3D.new()
 	fill.position = Vector3(0, 4.4, 5.6)
 	fill.light_color = Color(1.0, 0.62, 0.34)
-	fill.light_energy = 2.15
+	fill.light_energy = 2.55
 	fill.omni_range = 30.0
 	add_child(fill)
 	var road_light = OmniLight3D.new()
 	road_light.position = Vector3(0, 1.55, -8.0)
 	road_light.light_color = Color(1.0, 0.66, 0.28)
-	road_light.light_energy = 1.38
+	road_light.light_energy = 1.95
 	road_light.omni_range = 24.0
 	add_child(road_light)
 
@@ -847,61 +854,85 @@ func create_world():
 
 func create_road():
 	road_dash_nodes.clear()
-	# Temple floor base and side sand paths.
-	add_box("TempleGround", Vector3(0, -0.12, -38), Vector3(22.0, 0.060, 86.0), mats["temple_stone_dark"], world_root)
-	add_box("LeftSandPath", Vector3(-4.75, -0.045, -38), Vector3(1.90, 0.075, 76.0), mats["temple_sand"], world_root)
-	add_box("RightSandPath", Vector3(4.75, -0.045, -38), Vector3(1.90, 0.075, 76.0), mats["temple_sand"], world_root)
+	# Phase 5A.13: wider readable temple track with stone borders and cracks.
+	add_box("TempleGround", Vector3(0, -0.14, -38), Vector3(18.0, 0.060, 86.0), mats["temple_stone_dark"], world_root)
+	add_box("LeftSandPath", Vector3(-4.35, -0.060, -38), Vector3(1.70, 0.070, 76.0), mats["temple_sand"], world_root)
+	add_box("RightSandPath", Vector3(4.35, -0.060, -38), Vector3(1.70, 0.070, 76.0), mats["temple_sand"], world_root)
 
-	# Large uneven stone tiles down the runner path.
-	for i in range(20):
-		var z = -92.0 + float(i) * 5.2
+	for i in range(22):
+		var z = -94.0 + float(i) * 4.75
 		var mat = mats["road_panel"] if i % 2 == 0 else mats["road"]
-		var w = 5.70 + randf_range(-0.10, 0.10)
-		var plate = add_box("StoneRoadTile", Vector3(0, 0, z), Vector3(w, 0.092, 5.03), mat, world_root)
+		var w = 5.55 + randf_range(-0.06, 0.06)
+		var plate = add_box("StoneRoadTile", Vector3(0, 0, z), Vector3(w, 0.095, 4.52), mat, world_root)
 		road_dash_nodes.append(plate)
-		add_box("TileCrack", Vector3(randf_range(-1.9, 1.9), 0.082, z + randf_range(-1.9, 1.9)), Vector3(randf_range(0.45, 1.10), 0.018, 0.038), mats["temple_stone_dark"], world_root)
-		var seam = add_box("StoneSeam", Vector3(0, 0.075, z + 2.52), Vector3(w * 0.96, 0.018, 0.052), mats["temple_stone_dark"], world_root)
+		# small brick seams and cracks make the road feel like ancient stone instead of flat asphalt.
+		for c in range(3):
+			var crack = add_box("TileCrack", Vector3(randf_range(-2.25, 2.25), 0.093, z + randf_range(-1.85, 1.85)), Vector3(randf_range(0.34, 0.92), 0.018, 0.035), mats["temple_stone_dark"], world_root)
+			crack.rotation_degrees.y = randf_range(-8.0, 8.0)
+			road_dash_nodes.append(crack)
+		var seam = add_box("StoneSeam", Vector3(0, 0.085, z + 2.25), Vector3(w * 0.98, 0.020, 0.050), mats["temple_stone_dark"], world_root)
 		road_dash_nodes.append(seam)
 
-	# Gold guide rails and lane lines fit the ruins/treasure style.
-	add_box("LeftGoldRail", Vector3(-3.35, 0.18, -38), Vector3(0.105, 0.145, 66.0), mats["road_side"], world_root)
-	add_box("RightGoldRail", Vector3(3.35, 0.18, -38), Vector3(0.105, 0.145, 66.0), mats["road_side"], world_root)
-	add_box("LeftBrokenCurb", Vector3(-2.88, 0.060, -38), Vector3(0.16, 0.080, 66.0), mats["temple_stone"], world_root)
-	add_box("RightBrokenCurb", Vector3(2.88, 0.060, -38), Vector3(0.16, 0.080, 66.0), mats["temple_stone"], world_root)
+	# Raised side borders instead of modern rails.
+	for side_x in [-3.08, 3.08]:
+		add_box("StoneCurb", Vector3(side_x, 0.105, -38), Vector3(0.22, 0.155, 66.0), mats["stone_edge"], world_root)
+		add_box("GoldRuneRail", Vector3(side_x * 0.98, 0.240, -38), Vector3(0.055, 0.055, 66.0), mats["road_side"], world_root)
 
 	for x in [-0.83, 0.83]:
-		add_box("RuneLaneLine", Vector3(x, 0.145, -38), Vector3(0.026, 0.035, 66.0), mats["lane"], world_root)
-	for z in range(-90, 10, 4):
-		var dash = add_box("RuneDash", Vector3(0, 0.19, float(z)), Vector3(0.12, 0.040, 0.42), mats["lane_glow"], world_root)
+		add_box("RuneLaneLine", Vector3(x, 0.150, -38), Vector3(0.025, 0.036, 66.0), mats["lane"], world_root)
+	for z in range(-90, 10, 3):
+		var dash = add_box("RuneDash", Vector3(0, 0.205, float(z)), Vector3(0.13, 0.045, 0.38), mats["lane_glow"], world_root)
 		road_dash_nodes.append(dash)
-	for side_x in [-2.32, 2.32]:
-		for z in range(-90, 10, 6):
-			var side_dash = add_box("SideRune", Vector3(side_x, 0.185, float(z)), Vector3(0.080, 0.035, 0.72), mats["road_side"], world_root)
+	for side_x in [-2.30, 2.30]:
+		for z in range(-90, 10, 5):
+			var side_dash = add_box("SideRune", Vector3(side_x, 0.205, float(z)), Vector3(0.080, 0.040, 0.56), mats["road_side"], world_root)
 			road_dash_nodes.append(side_dash)
 
 func create_environment_props():
 	env_motion_nodes.clear()
-	# Fantasy temple ruins: no more block-city. Repeating pillars, broken walls,
-	# torches and moss make the ranger character visually consistent with the map.
-	for i in range(42):
-		var z = -98.0 + float(i) * 3.75
-		var left_x = -5.05 - randf() * 1.15
-		var right_x = 5.05 + randf() * 1.15
-		if i % 3 == 0:
+	# Phase 5A.13: denser side detail, cleaner symmetry, and more depth cues.
+	# Keep the middle track readable, but fill the empty upper view with arches and banners.
+	for i in range(46):
+		var z = -100.0 + float(i) * 3.45
+		var left_x = -4.70 - randf() * 0.72
+		var right_x = 4.70 + randf() * 0.72
+		if i % 4 == 0:
 			create_temple_arch_pair(z)
-		elif i % 3 == 1:
+			create_hanging_banner(z + 0.55)
+		elif i % 4 == 1:
 			create_ruin_wall(left_x, z)
-			create_ruin_wall(right_x, z + 1.7)
-		else:
+			create_ruin_wall(right_x, z + 1.45)
+		elif i % 4 == 2:
 			create_temple_pillar(left_x, z)
-			create_temple_pillar(right_x, z + 1.9)
+			create_temple_pillar(right_x, z + 1.55)
+		else:
+			create_low_side_steps(-3.86, z)
+			create_low_side_steps(3.86, z + 1.45)
 		if i % 2 == 0:
-			create_torch(-3.88, z + 0.9)
-			create_torch(3.88, z + 2.35)
-		elif i % 5 == 0:
-			create_mossy_rock(-4.20, z)
-			create_mossy_rock(4.20, z + 1.6)
+			create_torch(-3.72, z + 0.75)
+			create_torch(3.72, z + 2.10)
+		if i % 7 == 0:
+			create_mossy_rock(-4.10, z + 1.2)
+			create_mossy_rock(4.10, z + 2.6)
 
+
+func create_low_side_steps(x, z):
+	var group = create_prop_group("SideTempleSteps", x, z)
+	var dir = -1.0 if x < 0 else 1.0
+	add_box("StepBase", Vector3(0, 0.08, 0), Vector3(0.92, 0.16, 1.20), mats["temple_stone_dark"], group)
+	add_box("StepMid", Vector3(dir * 0.12, 0.25, 0.05), Vector3(0.72, 0.16, 0.92), mats["temple_stone"], group)
+	add_box("StepTop", Vector3(dir * 0.22, 0.42, 0.08), Vector3(0.48, 0.14, 0.62), mats["stone_highlight"], group)
+	group.rotation_degrees.y = randf_range(-7.0, 7.0)
+
+func create_hanging_banner(z):
+	var group = create_prop_group("TempleBanner", 0.0, z)
+	add_box("BannerBeam", Vector3(0, 3.25, 0), Vector3(4.95, 0.10, 0.12), mats["wood"], group)
+	var left = add_box("BannerL", Vector3(-1.15, 2.78, 0.02), Vector3(0.42, 0.78, 0.035), mats["banner"], group)
+	var right = add_box("BannerR", Vector3(1.15, 2.78, 0.02), Vector3(0.42, 0.78, 0.035), mats["banner"], group)
+	add_box("BannerGoldL", Vector3(-1.15, 2.40, 0.055), Vector3(0.34, 0.060, 0.020), mats["banner_gold"], group)
+	add_box("BannerGoldR", Vector3(1.15, 2.40, 0.055), Vector3(0.34, 0.060, 0.020), mats["banner_gold"], group)
+	left.rotation_degrees.x = randf_range(-3.0, 3.0)
+	right.rotation_degrees.x = randf_range(-3.0, 3.0)
 
 func create_temple_pillar(x, z):
 	var group = create_prop_group("TemplePillar", x, z)
@@ -1095,35 +1126,35 @@ func create_game_ui():
 	hud_label.anchor_right = 0.96
 	hud_label.anchor_top = 0.025
 	hud_label.anchor_bottom = 0.135
-	hud_label.add_theme_font_size_override("font_size", 17)
+	hud_label.add_theme_font_size_override("font_size", 15)
 	hud_label.add_theme_color_override("font_color", Color(0.94, 0.92, 1.0))
 	root.add_child(hud_label)
 
 	feedback_label = Label.new()
 	feedback_label.anchor_left = 0.30
 	feedback_label.anchor_right = 0.70
-	feedback_label.anchor_top = 0.18
-	feedback_label.anchor_bottom = 0.24
+	feedback_label.anchor_top = 0.145
+	feedback_label.anchor_bottom = 0.205
 	feedback_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	feedback_label.add_theme_font_size_override("font_size", 22)
 	feedback_label.add_theme_color_override("font_color", Color(1.0, 0.86, 0.26))
 	feedback_label.text = ""
 	root.add_child(feedback_label)
 
-	pause_button = make_button("II", 0.835, 0.030, 0.945, 0.082)
+	pause_button = make_button("II", 0.855, 0.028, 0.940, 0.076)
 	pause_button.pressed.connect(toggle_pause)
 	root.add_child(pause_button)
 
-	var left_btn = make_button("◀", 0.045, 0.900, 0.190, 0.955)
+	var left_btn = make_button("◀", 0.045, 0.902, 0.180, 0.954)
 	left_btn.pressed.connect(lane_left)
 	root.add_child(left_btn)
-	var right_btn = make_button("▶", 0.810, 0.900, 0.955, 0.955)
+	var right_btn = make_button("▶", 0.820, 0.902, 0.955, 0.954)
 	right_btn.pressed.connect(lane_right)
 	root.add_child(right_btn)
-	var jump_btn = make_button("JUMP", 0.335, 0.900, 0.485, 0.955)
+	var jump_btn = make_button("JUMP", 0.345, 0.905, 0.485, 0.954)
 	jump_btn.pressed.connect(jump)
 	root.add_child(jump_btn)
-	var slide_btn = make_button("SLIDE", 0.515, 0.900, 0.665, 0.955)
+	var slide_btn = make_button("SLIDE", 0.515, 0.905, 0.655, 0.954)
 	slide_btn.pressed.connect(slide)
 	root.add_child(slide_btn)
 
@@ -1155,11 +1186,11 @@ func make_button(text, l, t, r, b):
 	btn.anchor_top = t
 	btn.anchor_right = r
 	btn.anchor_bottom = b
-	btn.add_theme_font_size_override("font_size", 14)
+	btn.add_theme_font_size_override("font_size", 12)
 	btn.add_theme_color_override("font_color", Color(0.94, 0.92, 1.0, 0.92))
-	btn.add_theme_stylebox_override("normal", button_style(Color(0.035, 0.035, 0.055, 0.34)))
-	btn.add_theme_stylebox_override("hover", button_style(Color(0.22, 0.16, 0.38, 0.50)))
-	btn.add_theme_stylebox_override("pressed", button_style(Color(0.54, 0.34, 0.98, 0.72)))
+	btn.add_theme_stylebox_override("normal", button_style(Color(0.030, 0.024, 0.018, 0.26)))
+	btn.add_theme_stylebox_override("hover", button_style(Color(0.46, 0.25, 0.10, 0.48)))
+	btn.add_theme_stylebox_override("pressed", button_style(Color(0.95, 0.56, 0.16, 0.58)))
 	return btn
 
 func button_style(color):
@@ -1173,7 +1204,7 @@ func button_style(color):
 	style.border_width_top = 1
 	style.border_width_right = 1
 	style.border_width_bottom = 1
-	style.border_color = Color(0.75, 0.62, 1.0, 0.18)
+	style.border_color = Color(1.0, 0.78, 0.34, 0.18)
 	return style
 
 func reset_game():
@@ -1345,18 +1376,18 @@ func update_world_motion(delta):
 				prop.position.z -= 135.0
 
 func update_camera(delta):
-	# Phase 5A.10: tighter runner camera, less empty sky, better forward-speed feel.
-	var speed_push = clamp((game_speed() - 8.8) * 0.055, 0.0, 0.55)
-	var bob = sin(run_cycle * 0.52) * 0.035
-	var lane_look = player_root.position.x * 0.18
+	# Phase 5A.13: lower/closer camera so the temple road fills the screen instead of empty sky.
+	var speed_push = clamp((game_speed() - 8.8) * 0.045, 0.0, 0.42)
+	var bob = sin(run_cycle * 0.52) * 0.028
+	var lane_look = player_root.position.x * 0.15
 	var shake = Vector3.ZERO
 	if screen_shake_timer > 0.0:
 		screen_shake_timer = max(0.0, screen_shake_timer - delta)
-		shake = Vector3(randf_range(-0.08, 0.08), randf_range(-0.045, 0.045), 0) * (screen_shake_timer / 0.30)
-	var target_pos = Vector3(player_root.position.x * 0.26, 3.35 + bob, 7.20 - speed_push) + shake
-	camera.position = camera.position.lerp(target_pos, min(delta * 6.8, 1.0))
-	camera.fov = lerp(camera.fov, camera_base_fov + speed_push * 7.0, min(delta * 3.2, 1.0))
-	camera.look_at(Vector3(lane_look, 1.38 + bob, -15.8), Vector3.UP)
+		shake = Vector3(randf_range(-0.07, 0.07), randf_range(-0.040, 0.040), 0) * (screen_shake_timer / 0.30)
+	var target_pos = Vector3(player_root.position.x * 0.20, 3.02 + bob, 6.45 - speed_push) + shake
+	camera.position = camera.position.lerp(target_pos, min(delta * 7.4, 1.0))
+	camera.fov = lerp(camera.fov, camera_base_fov + speed_push * 5.0, min(delta * 3.4, 1.0))
+	camera.look_at(Vector3(lane_look, 1.08 + bob, -13.2), Vector3.UP)
 
 func update_hud():
 	var score = int(distance_score)
@@ -1423,58 +1454,53 @@ func item_height(kind):
 	match kind:
 		"coin": return 1.15
 		"powerup": return 1.38
-		"gate": return 1.48
+		"gate": return 1.36
 		"ramp": return 0.26
-		_: return 0.48
+		"cone": return 0.38
+		"barrier": return 0.43
+		_: return 0.45
 
 func create_item_node(kind):
 	var root = Node3D.new()
 	root.name = "Item_" + kind
-	var asset_key = ""
-	match kind:
-		"cone": asset_key = "cone"
-		"barrier": asset_key = "barrier"
-		"block": asset_key = "crate"
-		"gate": asset_key = "barrier"
-		_: asset_key = ""
-	if asset_key != "" and has_asset(asset_key):
-		var asset_scale = Vector3(0.95, 0.95, 0.95)
-		if kind == "gate":
-			asset_scale = Vector3(1.15, 1.15, 1.15)
-		var model = instantiate_asset_model(asset_key, root, Vector3.ZERO, asset_scale, Vector3.ZERO)
-		if model != null:
-			return root
+	# Phase 5A.13: use temple-themed procedural obstacles instead of cyber/modern blocks.
+	# External assets can still be used later, but these defaults now match the fantasy map.
 	match kind:
 		"coin":
-			var coin = add_cylinder("Coin", Vector3.ZERO, 0.24, 0.075, mats["coin"], root)
+			var coin = add_cylinder("GoldCoin", Vector3.ZERO, 0.24, 0.075, mats["coin"], root)
 			coin.rotation_degrees.x = 90
 			add_cylinder("CoinEdge", Vector3.ZERO, 0.27, 0.028, mats["coin_edge"], root).rotation_degrees.x = 90
+			add_box("CoinShine", Vector3(0.03, 0.0, -0.05), Vector3(0.055, 0.012, 0.20), mats["window_warm"], root)
 			add_sphere("CoinGlow", Vector3.ZERO, Vector3(0.42, 0.42, 0.055), mats["coin"], root)
 		"powerup":
-			add_sphere("PowerCore", Vector3.ZERO, Vector3(0.22, 0.22, 0.22), mats["powerup"], root)
-			add_cylinder("PowerRingA", Vector3.ZERO, 0.34, 0.030, mats["powerup"], root).rotation_degrees.x = 90
-			add_cylinder("PowerRingB", Vector3.ZERO, 0.27, 0.026, mats["powerup_dark"], root).rotation_degrees.z = 90
+			add_sphere("RuneCore", Vector3.ZERO, Vector3(0.22, 0.22, 0.22), mats["gem"], root)
+			add_cylinder("RuneRingA", Vector3.ZERO, 0.34, 0.030, mats["powerup"], root).rotation_degrees.x = 90
+			add_cylinder("RuneRingB", Vector3.ZERO, 0.27, 0.026, mats["powerup_dark"], root).rotation_degrees.z = 90
 		"gate":
-			add_box("GateTop", Vector3(0, 0.06, 0), Vector3(1.08, 0.12, 0.16), mats["powerup"], root)
-			add_box("GateL", Vector3(-0.52, -0.66, 0), Vector3(0.08, 1.18, 0.10), mats["powerup"], root)
-			add_box("GateR", Vector3(0.52, -0.66, 0), Vector3(0.08, 1.18, 0.10), mats["powerup"], root)
-			add_box("GateWarning", Vector3(0, -0.05, -0.10), Vector3(0.55, 0.045, 0.025), mats["danger_yellow"], root)
+			# Low temple lintel: readable slide-under hazard without neon/cyber look.
+			add_cylinder("GateColumnL", Vector3(-0.58, -0.55, 0), 0.09, 1.16, mats["temple_stone"], root)
+			add_cylinder("GateColumnR", Vector3(0.58, -0.55, 0), 0.09, 1.16, mats["temple_stone"], root)
+			add_box("GateLintel", Vector3(0, 0.04, 0), Vector3(1.30, 0.15, 0.18), mats["stone_highlight"], root)
+			add_box("GateRune", Vector3(0, -0.07, -0.12), Vector3(0.46, 0.036, 0.025), mats["danger_yellow"], root)
 		"ramp":
-			add_box("RampBase", Vector3(0, -0.02, 0), Vector3(0.78, 0.22, 0.70), mats["box"], root)
-			add_box("RampStripe", Vector3(0, 0.13, -0.20), Vector3(0.62, 0.032, 0.065), mats["box_band"], root)
-			root.rotation_degrees.x = -12
+			add_box("BrokenSlab", Vector3(0, -0.02, 0), Vector3(0.84, 0.18, 0.76), mats["temple_stone"], root)
+			add_box("SlabRune", Vector3(0, 0.10, -0.20), Vector3(0.58, 0.030, 0.055), mats["road_side"], root)
+			root.rotation_degrees.x = -10
 		"cone":
-			add_tapered_cylinder("ConeBody", Vector3(0, 0.02, 0), 0.06, 0.24, 0.64, mats["obstacle"], root)
-			add_box("ConeBase", Vector3(0, -0.34, 0), Vector3(0.46, 0.07, 0.46), mats["obstacle_dark"], root)
-			add_box("ConeStripe", Vector3(0, -0.02, -0.21), Vector3(0.28, 0.036, 0.020), mats["box_band"], root)
+			# Spike trap in place of traffic cone.
+			add_box("SpikeBase", Vector3(0, -0.31, 0), Vector3(0.56, 0.07, 0.50), mats["temple_stone_dark"], root)
+			for sx in [-0.18, 0.0, 0.18]:
+				var spike = add_tapered_cylinder("Spike", Vector3(sx, -0.01, 0), 0.015, 0.105, 0.58, mats["spike"], root)
+				spike.rotation_degrees.x = randf_range(-3.0, 3.0)
 		"barrier":
-			add_box("BarrierMain", Vector3(0, 0.10, 0), Vector3(0.92, 0.34, 0.16), mats["obstacle"], root)
-			add_box("BarrierStripeA", Vector3(-0.22, 0.13, -0.105), Vector3(0.26, 0.055, 0.025), mats["box_band"], root)
-			add_box("BarrierStripeB", Vector3(0.22, 0.13, -0.105), Vector3(0.26, 0.055, 0.025), mats["box_band"], root)
-			add_box("BarrierBase", Vector3(0, -0.18, 0), Vector3(1.00, 0.08, 0.30), mats["obstacle_dark"], root)
+			add_box("StoneBarrier", Vector3(0, 0.04, 0), Vector3(0.95, 0.42, 0.20), mats["temple_stone"], root)
+			add_box("BarrierCap", Vector3(0, 0.31, 0), Vector3(1.05, 0.08, 0.28), mats["stone_edge"], root)
+			add_box("BarrierRuneA", Vector3(-0.22, 0.10, -0.13), Vector3(0.22, 0.045, 0.025), mats["road_side"], root)
+			add_box("BarrierRuneB", Vector3(0.22, 0.10, -0.13), Vector3(0.22, 0.045, 0.025), mats["road_side"], root)
 		_:
-			add_box("Crate", Vector3.ZERO, Vector3(0.62, 0.62, 0.62), mats["box"], root)
-			add_box("CrateTop", Vector3(0, 0.33, 0), Vector3(0.66, 0.045, 0.66), mats["box_band"], root)
+			# Wooden temple crate.
+			add_box("WoodCrate", Vector3.ZERO, Vector3(0.62, 0.62, 0.62), mats["wood"], root)
+			add_box("CrateTop", Vector3(0, 0.33, 0), Vector3(0.66, 0.045, 0.66), mats["wood_light"], root)
 			add_box("CrateBandH", Vector3(0, 0.02, -0.33), Vector3(0.64, 0.060, 0.028), mats["box_band"], root)
 			add_box("CrateBandV", Vector3(0.20, 0.02, -0.34), Vector3(0.060, 0.62, 0.028), mats["box_band"], root)
 	return root
@@ -1484,10 +1510,10 @@ func collision_window_for(kind):
 	match kind:
 		"coin": return 1.18
 		"powerup": return 1.18
-		"gate": return 0.92
-		"barrier": return 0.88
-		"cone": return 0.78
-		_: return 0.86
+		"gate": return 0.88
+		"barrier": return 0.82
+		"cone": return 0.74
+		_: return 0.80
 
 func check_collision(item, remove_list):
 	var x_gap = abs(item.node.position.x - player_root.position.x)
@@ -1498,7 +1524,7 @@ func check_collision(item, remove_list):
 			remove_list.append(item)
 		return
 	# Use real player x gap too, not only lane index. This prevents unfair deaths mid-lane-change.
-	if x_gap > 0.64:
+	if x_gap > 0.70:
 		if z_gap < 0.48 and x_gap < 1.10:
 			near_miss_timer = 0.55
 		return

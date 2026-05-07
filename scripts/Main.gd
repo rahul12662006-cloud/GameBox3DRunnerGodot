@@ -1,7 +1,7 @@
 extends Node3D
 
 # GameBox 3D Runner - Android-safe real 3D prototype.
-# Phase 5A.11: Environment and obstacle polish - no image generation, code patch only.
+# Phase 5A.12: Fantasy Temple visual reset - no image generation, code patch only.
 
 const LANES = [-1.65, 0.0, 1.65]
 const PLAYER_Z = 3.2
@@ -726,39 +726,45 @@ func create_asset_prop(key, x, z, scale_min := 0.65, scale_max := 1.15):
 	return group
 
 func create_materials():
-	# Phase 5A.11: clearer mobile-first art direction.
-	# Dark runner mood stays, but road/obstacles/collectibles are more readable.
-	mats["road"] = make_mat(Color(0.026, 0.031, 0.043))
-	mats["road_panel"] = make_mat(Color(0.043, 0.050, 0.066))
-	mats["road_side"] = make_mat(Color(0.62, 0.34, 1.00), true, 0.70)
-	mats["lane"] = make_mat(Color(0.88, 0.90, 1.0))
-	mats["lane_glow"] = make_mat(Color(0.86, 0.66, 1.0), true, 0.65)
+	# Phase 5A.12: Fantasy Temple visual reset.
+	# The ranger character fits a warm ruins/temple runner better than the old grey cyber city.
+	mats["road"] = make_mat(Color(0.145, 0.125, 0.105))
+	mats["road_panel"] = make_mat(Color(0.205, 0.175, 0.135))
+	mats["road_side"] = make_mat(Color(1.0, 0.62, 0.18), true, 0.55)
+	mats["lane"] = make_mat(Color(0.95, 0.82, 0.52))
+	mats["lane_glow"] = make_mat(Color(1.0, 0.68, 0.24), true, 0.62)
 	mats["player"] = make_mat(character_color())
 	mats["player_light"] = make_mat(character_color().lightened(0.25), true, 0.10)
-	mats["player_dark"] = make_mat(Color(0.13, 0.10, 0.25))
-	mats["shoe"] = make_mat(Color(0.06, 0.055, 0.09))
-	mats["coin"] = make_mat(Color(1.0, 0.82, 0.10), true, 0.95)
-	mats["coin_edge"] = make_mat(Color(1.0, 0.55, 0.06), true, 0.45)
-	mats["powerup"] = make_mat(Color(0.16, 0.94, 1.0), true, 1.05)
-	mats["powerup_dark"] = make_mat(Color(0.02, 0.38, 0.45), true, 0.45)
-	mats["obstacle"] = make_mat(Color(1.0, 0.16, 0.25))
-	mats["obstacle_dark"] = make_mat(Color(0.32, 0.03, 0.08))
-	mats["danger_yellow"] = make_mat(Color(1.0, 0.78, 0.14), true, 0.22)
-	mats["box"] = make_mat(Color(0.95, 0.45, 0.18))
-	mats["box_band"] = make_mat(Color(1.0, 0.78, 0.42), true, 0.15)
+	mats["player_dark"] = make_mat(Color(0.12, 0.08, 0.055))
+	mats["shoe"] = make_mat(Color(0.08, 0.045, 0.025))
+	mats["coin"] = make_mat(Color(1.0, 0.84, 0.10), true, 0.95)
+	mats["coin_edge"] = make_mat(Color(1.0, 0.50, 0.05), true, 0.42)
+	mats["powerup"] = make_mat(Color(0.15, 1.0, 0.72), true, 0.95)
+	mats["powerup_dark"] = make_mat(Color(0.03, 0.32, 0.22), true, 0.45)
+	mats["obstacle"] = make_mat(Color(0.70, 0.18, 0.12))
+	mats["obstacle_dark"] = make_mat(Color(0.18, 0.06, 0.035))
+	mats["danger_yellow"] = make_mat(Color(1.0, 0.74, 0.12), true, 0.24)
+	mats["box"] = make_mat(Color(0.47, 0.24, 0.11))
+	mats["box_band"] = make_mat(Color(0.82, 0.58, 0.29), true, 0.10)
 	mats["shadow"] = make_mat(Color(0.0, 0.0, 0.0, 0.50))
-	mats["env_dark"] = make_mat(Color(0.09, 0.095, 0.155))
-	mats["env_mid"] = make_mat(Color(0.145, 0.150, 0.235))
-	mats["env_near"] = make_mat(Color(0.19, 0.18, 0.29))
-	mats["window"] = make_mat(Color(0.78, 0.88, 1.0), true, 0.42)
-	mats["window_warm"] = make_mat(Color(1.0, 0.72, 0.35), true, 0.52)
-	mats["sidewalk"] = make_mat(Color(0.048, 0.050, 0.066))
-	mats["env_green"] = make_mat(Color(0.05, 0.32, 0.14))
-	mats["env_desert"] = make_mat(Color(0.52, 0.31, 0.14))
+	mats["env_dark"] = make_mat(Color(0.165, 0.125, 0.088))
+	mats["env_mid"] = make_mat(Color(0.265, 0.215, 0.155))
+	mats["env_near"] = make_mat(Color(0.38, 0.31, 0.22))
+	mats["window"] = make_mat(Color(1.0, 0.58, 0.20), true, 0.55)
+	mats["window_warm"] = make_mat(Color(1.0, 0.82, 0.36), true, 0.78)
+	mats["sidewalk"] = make_mat(Color(0.105, 0.090, 0.074))
+	mats["env_green"] = make_mat(Color(0.08, 0.32, 0.14))
+	mats["env_desert"] = make_mat(Color(0.58, 0.39, 0.20))
 	mats["env_snow"] = make_mat(Color(0.78, 0.88, 0.98))
 	mats["env_cyber"] = make_mat(Color(0.10, 0.72, 0.95), true, 0.95)
-	mats["lamp"] = make_mat(Color(1.0, 0.86, 0.52), true, 1.20)
-
+	mats["lamp"] = make_mat(Color(1.0, 0.72, 0.28), true, 1.45)
+	mats["temple_stone"] = make_mat(Color(0.31, 0.265, 0.205))
+	mats["temple_stone_dark"] = make_mat(Color(0.16, 0.135, 0.105))
+	mats["temple_sand"] = make_mat(Color(0.43, 0.32, 0.19))
+	mats["temple_moss"] = make_mat(Color(0.075, 0.22, 0.09))
+	mats["torch_fire"] = make_mat(Color(1.0, 0.43, 0.10), true, 1.85)
+	mats["torch_core"] = make_mat(Color(1.0, 0.86, 0.28), true, 2.15)
+	mats["gem"] = make_mat(Color(0.14, 0.95, 0.72), true, 1.0)
 
 func make_mat(color, emission_enabled := false, emission_energy := 0.0):
 	var mat = StandardMaterial3D.new()
@@ -806,115 +812,138 @@ func create_world():
 	var env = WorldEnvironment.new()
 	var e = Environment.new()
 	e.background_mode = Environment.BG_COLOR
-	match map_key():
-		"jungle": e.background_color = Color(0.020, 0.105, 0.075)
-		"desert": e.background_color = Color(0.20, 0.12, 0.060)
-		"snow": e.background_color = Color(0.12, 0.16, 0.235)
-		"cyber": e.background_color = Color(0.010, 0.014, 0.045)
-		_: e.background_color = Color(0.038, 0.042, 0.062)
+	# Fantasy temple: warm dusk/ruins palette instead of grey block city.
+	e.background_color = Color(0.105, 0.085, 0.062)
 	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	e.ambient_light_color = Color(0.54, 0.56, 0.70)
-	e.ambient_light_energy = 1.12
+	e.ambient_light_color = Color(0.82, 0.62, 0.43)
+	e.ambient_light_energy = 1.24
 	e.fog_enabled = true
-	e.fog_density = 0.0095
-	e.fog_light_color = e.background_color.lightened(0.32)
+	e.fog_density = 0.0068
+	e.fog_light_color = Color(0.33, 0.24, 0.16)
 	env.environment = e
 	add_child(env)
 	RenderingServer.set_default_clear_color(e.background_color)
 
 	var sun = DirectionalLight3D.new()
-	sun.light_energy = 3.75
-	sun.rotation_degrees = Vector3(-54, -18, 0)
+	sun.light_energy = 3.85
+	sun.light_color = Color(1.0, 0.82, 0.56)
+	sun.rotation_degrees = Vector3(-48, -22, 0)
 	add_child(sun)
 	var fill = OmniLight3D.new()
-	fill.position = Vector3(0, 4.8, 5.2)
-	fill.light_energy = 2.55
-	fill.omni_range = 28.0
+	fill.position = Vector3(0, 4.4, 5.6)
+	fill.light_color = Color(1.0, 0.62, 0.34)
+	fill.light_energy = 2.15
+	fill.omni_range = 30.0
 	add_child(fill)
 	var road_light = OmniLight3D.new()
-	road_light.position = Vector3(0, 1.9, -9.0)
-	road_light.light_color = Color(0.76, 0.68, 1.0)
-	road_light.light_energy = 1.25
+	road_light.position = Vector3(0, 1.55, -8.0)
+	road_light.light_color = Color(1.0, 0.66, 0.28)
+	road_light.light_energy = 1.38
 	road_light.omni_range = 24.0
 	add_child(road_light)
 
 	create_road()
 	create_environment_props()
 
-
 func create_road():
 	road_dash_nodes.clear()
-	add_box("GroundPlane", Vector3(0, -0.10, -38), Vector3(22.0, 0.055, 82.0), make_mat(Color(0.016, 0.017, 0.024)), world_root)
-	add_box("LeftSidewalk", Vector3(-4.55, -0.035, -38), Vector3(1.65, 0.070, 74.0), mats["sidewalk"], world_root)
-	add_box("RightSidewalk", Vector3(4.55, -0.035, -38), Vector3(1.65, 0.070, 74.0), mats["sidewalk"], world_root)
+	# Temple floor base and side sand paths.
+	add_box("TempleGround", Vector3(0, -0.12, -38), Vector3(22.0, 0.060, 86.0), mats["temple_stone_dark"], world_root)
+	add_box("LeftSandPath", Vector3(-4.75, -0.045, -38), Vector3(1.90, 0.075, 76.0), mats["temple_sand"], world_root)
+	add_box("RightSandPath", Vector3(4.75, -0.045, -38), Vector3(1.90, 0.075, 76.0), mats["temple_sand"], world_root)
 
-	# Wider, layered road plates with small seams make speed readable without visual noise.
-	for i in range(18):
-		var z = -90.0 + float(i) * 5.6
-		var mat = mats["road"] if i % 2 == 0 else mats["road_panel"]
-		var plate = add_box("RoadPlate", Vector3(0, 0, z), Vector3(5.60, 0.082, 5.42), mat, world_root)
+	# Large uneven stone tiles down the runner path.
+	for i in range(20):
+		var z = -92.0 + float(i) * 5.2
+		var mat = mats["road_panel"] if i % 2 == 0 else mats["road"]
+		var w = 5.70 + randf_range(-0.10, 0.10)
+		var plate = add_box("StoneRoadTile", Vector3(0, 0, z), Vector3(w, 0.092, 5.03), mat, world_root)
 		road_dash_nodes.append(plate)
-		var seam = add_box("RoadSeam", Vector3(0, 0.068, z + 2.72), Vector3(5.55, 0.018, 0.045), make_mat(Color(0.015, 0.018, 0.028)), world_root)
+		add_box("TileCrack", Vector3(randf_range(-1.9, 1.9), 0.082, z + randf_range(-1.9, 1.9)), Vector3(randf_range(0.45, 1.10), 0.018, 0.038), mats["temple_stone_dark"], world_root)
+		var seam = add_box("StoneSeam", Vector3(0, 0.075, z + 2.52), Vector3(w * 0.96, 0.018, 0.052), mats["temple_stone_dark"], world_root)
 		road_dash_nodes.append(seam)
 
-	add_box("LeftRail", Vector3(-3.35, 0.19, -38), Vector3(0.105, 0.155, 64.0), mats["road_side"], world_root)
-	add_box("RightRail", Vector3(3.35, 0.19, -38), Vector3(0.105, 0.155, 64.0), mats["road_side"], world_root)
-	add_box("LeftCurb", Vector3(-2.88, 0.055, -38), Vector3(0.16, 0.080, 64.0), mats["env_mid"], world_root)
-	add_box("RightCurb", Vector3(2.88, 0.055, -38), Vector3(0.16, 0.080, 64.0), mats["env_mid"], world_root)
+	# Gold guide rails and lane lines fit the ruins/treasure style.
+	add_box("LeftGoldRail", Vector3(-3.35, 0.18, -38), Vector3(0.105, 0.145, 66.0), mats["road_side"], world_root)
+	add_box("RightGoldRail", Vector3(3.35, 0.18, -38), Vector3(0.105, 0.145, 66.0), mats["road_side"], world_root)
+	add_box("LeftBrokenCurb", Vector3(-2.88, 0.060, -38), Vector3(0.16, 0.080, 66.0), mats["temple_stone"], world_root)
+	add_box("RightBrokenCurb", Vector3(2.88, 0.060, -38), Vector3(0.16, 0.080, 66.0), mats["temple_stone"], world_root)
 
 	for x in [-0.83, 0.83]:
-		add_box("LaneLine", Vector3(x, 0.145, -38), Vector3(0.025, 0.035, 64.0), mats["lane"], world_root)
+		add_box("RuneLaneLine", Vector3(x, 0.145, -38), Vector3(0.026, 0.035, 66.0), mats["lane"], world_root)
 	for z in range(-90, 10, 4):
-		var dash = add_box("CenterDash", Vector3(0, 0.19, float(z)), Vector3(0.11, 0.038, 0.48), mats["lane_glow"], world_root)
+		var dash = add_box("RuneDash", Vector3(0, 0.19, float(z)), Vector3(0.12, 0.040, 0.42), mats["lane_glow"], world_root)
 		road_dash_nodes.append(dash)
 	for side_x in [-2.32, 2.32]:
-		for z in range(-90, 10, 5):
-			var side_dash = add_box("EdgeDash", Vector3(side_x, 0.185, float(z)), Vector3(0.065, 0.035, 0.82), mats["road_side"], world_root)
+		for z in range(-90, 10, 6):
+			var side_dash = add_box("SideRune", Vector3(side_x, 0.185, float(z)), Vector3(0.080, 0.035, 0.72), mats["road_side"], world_root)
 			road_dash_nodes.append(side_dash)
-
 
 func create_environment_props():
 	env_motion_nodes.clear()
-	var key = map_key()
-	for i in range(40):
-		var z = -98.0 + float(i) * 3.85
-		var left_x = -5.35 - randf() * 1.65
-		var right_x = 5.35 + randf() * 1.65
-		match key:
-			"jungle":
-				if create_asset_prop("environment", left_x, z, 0.55, 1.05) == null:
-					create_tree(left_x, z)
-				if create_asset_prop("environment", right_x, z + 2.2, 0.55, 1.05) == null:
-					create_tree(right_x, z + 2.2)
-			"desert":
-				if create_asset_prop("environment", left_x, z, 0.70, 1.20) == null:
-					create_pillar(left_x, z)
-				if create_asset_prop("environment", right_x, z + 1.7, 0.70, 1.20) == null:
-					create_pillar(right_x, z + 1.7)
-			"snow":
-				if create_asset_prop("environment", left_x, z, 0.65, 1.15) == null:
-					create_rock(left_x, z, mats["env_snow"])
-				if create_asset_prop("environment", right_x, z + 1.3, 0.65, 1.15) == null:
-					create_rock(right_x, z + 1.3, mats["env_snow"])
-			"cyber":
-				create_neon_gate(z)
-			_:
-				if has_asset("building") and randf() > 0.20:
-					create_asset_prop("building", left_x, z, 0.55, 1.12)
-				else:
-					create_building(left_x, z)
-				if has_asset("building") and randf() > 0.20:
-					create_asset_prop("building", right_x, z + 2.0, 0.55, 1.12)
-				else:
-					create_building(right_x, z + 2.0)
-		# Always provide readable side lights; asset lamps are optional extras.
+	# Fantasy temple ruins: no more block-city. Repeating pillars, broken walls,
+	# torches and moss make the ranger character visually consistent with the map.
+	for i in range(42):
+		var z = -98.0 + float(i) * 3.75
+		var left_x = -5.05 - randf() * 1.15
+		var right_x = 5.05 + randf() * 1.15
+		if i % 3 == 0:
+			create_temple_arch_pair(z)
+		elif i % 3 == 1:
+			create_ruin_wall(left_x, z)
+			create_ruin_wall(right_x, z + 1.7)
+		else:
+			create_temple_pillar(left_x, z)
+			create_temple_pillar(right_x, z + 1.9)
 		if i % 2 == 0:
-			create_street_light(-3.92, z + 0.9)
-			create_street_light(3.92, z + 2.4)
-		elif has_asset("lamp") and i % 3 == 0:
-			create_asset_prop("lamp", -3.95, z + 0.9, 0.55, 0.90)
-			create_asset_prop("lamp", 3.95, z + 2.4, 0.55, 0.90)
+			create_torch(-3.88, z + 0.9)
+			create_torch(3.88, z + 2.35)
+		elif i % 5 == 0:
+			create_mossy_rock(-4.20, z)
+			create_mossy_rock(4.20, z + 1.6)
 
+
+func create_temple_pillar(x, z):
+	var group = create_prop_group("TemplePillar", x, z)
+	var h = randf_range(1.9, 3.6)
+	add_cylinder("PillarBase", Vector3(0, 0.12, 0), 0.42, 0.24, mats["temple_stone_dark"], group)
+	add_cylinder("PillarCore", Vector3(0, h * 0.50 + 0.18, 0), 0.28, h, mats["temple_stone"], group)
+	add_cylinder("PillarTop", Vector3(0, h + 0.40, 0), 0.46, 0.28, mats["temple_stone_dark"], group)
+	if randf() > 0.55:
+		add_box("MossPatch", Vector3(0.02, h * 0.72, -0.29), Vector3(0.30, 0.10, 0.025), mats["temple_moss"], group)
+
+func create_ruin_wall(x, z):
+	var group = create_prop_group("RuinWall", x, z)
+	var h = randf_range(0.8, 2.4)
+	var w = randf_range(0.9, 1.7)
+	add_box("WallBlock", Vector3(0, h * 0.50, 0), Vector3(w, h, randf_range(0.32, 0.55)), mats["temple_stone"], group)
+	if randf() > 0.38:
+		add_box("BrokenCap", Vector3(randf_range(-0.2, 0.2), h + 0.08, 0), Vector3(w * 0.82, 0.16, 0.50), mats["temple_stone_dark"], group)
+	if randf() > 0.45:
+		add_box("GoldenRune", Vector3(0, h * 0.55, -0.30), Vector3(0.10, 0.36, 0.030), mats["road_side"], group)
+
+func create_temple_arch_pair(z):
+	create_temple_arch(-4.85, z, -1.0)
+	create_temple_arch(4.85, z + 1.9, 1.0)
+
+func create_temple_arch(x, z, side):
+	var group = create_prop_group("TempleArch", x, z)
+	add_cylinder("ArchPillarA", Vector3(-0.33 * side, 1.05, 0), 0.16, 2.1, mats["temple_stone"], group)
+	add_cylinder("ArchPillarB", Vector3(0.33 * side, 1.05, 0), 0.16, 2.1, mats["temple_stone"], group)
+	add_box("ArchTop", Vector3(0, 2.16, 0), Vector3(0.92, 0.22, 0.42), mats["temple_stone_dark"], group)
+	add_box("ArchRune", Vector3(0, 2.31, -0.23), Vector3(0.36, 0.045, 0.025), mats["road_side"], group)
+
+func create_torch(x, z):
+	var group = create_prop_group("Torch", x, z)
+	add_cylinder("TorchPost", Vector3(0, 0.72, 0), 0.035, 1.35, mats["box"], group)
+	add_box("TorchCup", Vector3(0, 1.40, 0), Vector3(0.22, 0.11, 0.22), mats["obstacle_dark"], group)
+	add_sphere("TorchGlow", Vector3(0, 1.56, 0), Vector3(0.20, 0.24, 0.20), mats["torch_fire"], group)
+	add_sphere("TorchCore", Vector3(0, 1.61, 0), Vector3(0.10, 0.14, 0.10), mats["torch_core"], group)
+
+func create_mossy_rock(x, z):
+	var group = create_prop_group("MossyRock", x, z)
+	add_sphere("Rock", Vector3(0, 0.28, 0), Vector3(randf_range(0.42, 0.82), 0.28, randf_range(0.42, 0.82)), mats["temple_stone"], group)
+	add_box("Moss", Vector3(0.08, 0.55, -0.03), Vector3(0.35, 0.04, 0.30), mats["temple_moss"], group)
 
 func create_prop_group(name, x, z):
 	var group = Node3D.new()

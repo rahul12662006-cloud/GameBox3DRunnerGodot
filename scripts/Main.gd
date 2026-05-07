@@ -1,7 +1,7 @@
 extends Node3D
 
 # GameBox 3D Runner - Android-safe real 3D prototype.
-# Phase 5A.13: Temple Runner polish - readability, camera, obstacles, UI. Code patch only.
+# Phase 5A.14: Gameplay readability + obstacle stability. Code patch only.
 
 const LANES = [-1.65, 0.0, 1.65]
 const PLAYER_Z = 3.2
@@ -90,7 +90,7 @@ var last_spawn_lane = 1
 var lane_change_flash_timer = 0.0
 var combo_bonus = 0
 var near_miss_timer = 0.0
-var camera_base_fov = 66.0
+var camera_base_fov = 62.0
 
 func _ready():
 	randomize()
@@ -1124,37 +1124,37 @@ func create_game_ui():
 	hud_label = Label.new()
 	hud_label.anchor_left = 0.04
 	hud_label.anchor_right = 0.96
-	hud_label.anchor_top = 0.025
-	hud_label.anchor_bottom = 0.135
-	hud_label.add_theme_font_size_override("font_size", 15)
+	hud_label.anchor_top = 0.055
+	hud_label.anchor_bottom = 0.150
+	hud_label.add_theme_font_size_override("font_size", 13)
 	hud_label.add_theme_color_override("font_color", Color(0.94, 0.92, 1.0))
 	root.add_child(hud_label)
 
 	feedback_label = Label.new()
 	feedback_label.anchor_left = 0.30
 	feedback_label.anchor_right = 0.70
-	feedback_label.anchor_top = 0.145
-	feedback_label.anchor_bottom = 0.205
+	feedback_label.anchor_top = 0.170
+	feedback_label.anchor_bottom = 0.230
 	feedback_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	feedback_label.add_theme_font_size_override("font_size", 22)
 	feedback_label.add_theme_color_override("font_color", Color(1.0, 0.86, 0.26))
 	feedback_label.text = ""
 	root.add_child(feedback_label)
 
-	pause_button = make_button("II", 0.855, 0.028, 0.940, 0.076)
+	pause_button = make_button("II", 0.865, 0.055, 0.940, 0.103)
 	pause_button.pressed.connect(toggle_pause)
 	root.add_child(pause_button)
 
-	var left_btn = make_button("◀", 0.045, 0.902, 0.180, 0.954)
+	var left_btn = make_button("◀", 0.045, 0.900, 0.178, 0.952)
 	left_btn.pressed.connect(lane_left)
 	root.add_child(left_btn)
-	var right_btn = make_button("▶", 0.820, 0.902, 0.955, 0.954)
+	var right_btn = make_button("▶", 0.822, 0.900, 0.955, 0.952)
 	right_btn.pressed.connect(lane_right)
 	root.add_child(right_btn)
-	var jump_btn = make_button("JUMP", 0.345, 0.905, 0.485, 0.954)
+	var jump_btn = make_button("JUMP", 0.340, 0.902, 0.485, 0.952)
 	jump_btn.pressed.connect(jump)
 	root.add_child(jump_btn)
-	var slide_btn = make_button("SLIDE", 0.515, 0.905, 0.655, 0.954)
+	var slide_btn = make_button("SLIDE", 0.515, 0.902, 0.660, 0.952)
 	slide_btn.pressed.connect(slide)
 	root.add_child(slide_btn)
 
@@ -1347,10 +1347,17 @@ func update_items(delta):
 	for item in items:
 		item.z += move
 		item.node.position.z = item.z
+
+		# Phase 5A.14: obstacle stability fix.
+		# Crates/barriers/gates/spikes must stay stable and readable while they approach.
+		# Only collectibles are allowed to spin/glow.
 		if item.kind == "coin" or item.kind == "powerup":
-			item.node.rotation_degrees.y += delta * 100.0
+			item.node.rotation_degrees.y += delta * 118.0
+			item.node.position.y = item.base_y + sin(Time.get_ticks_msec() * 0.004 + float(item.lane)) * 0.055
 		else:
-			item.node.rotation_degrees.y += delta * 16.0
+			item.node.rotation_degrees = item.base_rotation
+			item.node.position.y = item.base_y
+
 		if magnet_timer > 0.0 and (item.kind == "coin" or item.kind == "powerup"):
 			item.node.position.x = lerp(item.node.position.x, player_root.position.x, min(delta * 4.5, 1.0))
 		if item.z > DESPAWN_Z:
@@ -1376,18 +1383,18 @@ func update_world_motion(delta):
 				prop.position.z -= 135.0
 
 func update_camera(delta):
-	# Phase 5A.13: lower/closer camera so the temple road fills the screen instead of empty sky.
-	var speed_push = clamp((game_speed() - 8.8) * 0.045, 0.0, 0.42)
-	var bob = sin(run_cycle * 0.52) * 0.028
-	var lane_look = player_root.position.x * 0.15
+	# Phase 5A.14: tighter framing to reduce empty sky while keeping obstacles readable.
+	var speed_push = clamp((game_speed() - 8.8) * 0.040, 0.0, 0.38)
+	var bob = sin(run_cycle * 0.52) * 0.022
+	var lane_look = player_root.position.x * 0.16
 	var shake = Vector3.ZERO
 	if screen_shake_timer > 0.0:
 		screen_shake_timer = max(0.0, screen_shake_timer - delta)
-		shake = Vector3(randf_range(-0.07, 0.07), randf_range(-0.040, 0.040), 0) * (screen_shake_timer / 0.30)
-	var target_pos = Vector3(player_root.position.x * 0.20, 3.02 + bob, 6.45 - speed_push) + shake
-	camera.position = camera.position.lerp(target_pos, min(delta * 7.4, 1.0))
-	camera.fov = lerp(camera.fov, camera_base_fov + speed_push * 5.0, min(delta * 3.4, 1.0))
-	camera.look_at(Vector3(lane_look, 1.08 + bob, -13.2), Vector3.UP)
+		shake = Vector3(randf_range(-0.06, 0.06), randf_range(-0.032, 0.032), 0) * (screen_shake_timer / 0.30)
+	var target_pos = Vector3(player_root.position.x * 0.18, 2.76 + bob, 5.86 - speed_push) + shake
+	camera.position = camera.position.lerp(target_pos, min(delta * 8.2, 1.0))
+	camera.fov = lerp(camera.fov, camera_base_fov + speed_push * 3.8, min(delta * 3.6, 1.0))
+	camera.look_at(Vector3(lane_look, 0.96 + bob, -12.0), Vector3.UP)
 
 func update_hud():
 	var score = int(distance_score)
@@ -1447,8 +1454,11 @@ func spawn_item(z):
 	else:
 		# Tiny lane glow below collectibles makes them easier to read at speed.
 		add_box("CollectibleMarker", Vector3(0, -item_height(kind) + 0.10, 0), Vector3(0.20, 0.018, 0.20), mats["lane_glow"], node)
+	# Store stable orientation/height. Obstacles should not spin in the update loop.
+	var stable_rotation = node.rotation_degrees
+	var stable_y = node.position.y
 	item_root.add_child(node)
-	items.append({"node": node, "lane": lane, "z": z, "kind": kind})
+	items.append({"node": node, "lane": lane, "z": z, "kind": kind, "base_rotation": stable_rotation, "base_y": stable_y})
 
 func item_height(kind):
 	match kind:

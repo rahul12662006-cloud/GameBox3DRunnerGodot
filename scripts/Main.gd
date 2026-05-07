@@ -1,7 +1,7 @@
 extends Node3D
 
 # GameBox 3D Runner - Android-safe real 3D prototype.
-# Phase 5A.8.1: upright character safety fix + safe motion fallback.
+# Phase 5A.9: Universal Animation Library hook + safe upright fallback.
 
 const LANES = [-1.65, 0.0, 1.65]
 const PLAYER_Z = 3.2
@@ -75,6 +75,13 @@ var imported_overlay_arm_r = null
 var imported_overlay_leg_l = null
 var imported_overlay_leg_r = null
 var imported_overlay_mode = false
+var imported_animation_player = null
+var imported_animation_status = "Animation: not loaded"
+var imported_run_animation = ""
+var imported_idle_animation = ""
+var imported_jump_animation = ""
+var imported_slide_animation = ""
+var imported_current_anim = ""
 
 func _ready():
 	randomize()
@@ -255,12 +262,11 @@ func create_locked_character_instance():
 
 
 func prepare_imported_character_visual(model):
-	# Phase 5A.8.1 safety fix: keep the imported Quaternius outfit upright.
-	# The pack skeleton bone axes vary by export, so direct bone-pose edits can flip the
-	# full character upside-down. For now we do NOT touch the skeleton. We keep the
-	# real character mesh upright and use parent/body bob + lane lean for motion feel.
+	# Phase 5A.9: keep the model upright, then try to attach the Quaternius UAL animation GLB.
+	# No blind bone-pose guessing. If real retarget fails, we keep safe upright mode instead
+	# of flipping/folding the character.
 	imported_player_model = model
-	imported_skeleton = null
+	imported_skeleton = find_first_skeleton(model)
 	imported_bones = {}
 	imported_pose_ready = false
 	imported_overlay_mode = false
@@ -268,8 +274,134 @@ func prepare_imported_character_visual(model):
 	imported_overlay_arm_r = null
 	imported_overlay_leg_l = null
 	imported_overlay_leg_r = null
+	imported_animation_player = null
+	imported_animation_status = "Animation: safe upright"
+	imported_run_animation = ""
+	imported_idle_animation = ""
+	imported_jump_animation = ""
+	imported_slide_animation = ""
+	imported_current_anim = ""
 	asset_debug_text = "Character: LockedCharacter.tscn • safe upright"
-	print("GameBox character loaded in safe upright mode; skeleton animation disabled to avoid flip.")
+	if imported_skeleton != null:
+		print("GameBox character skeleton found: ", imported_skeleton.name, " bones=", imported_skeleton.get_bone_count())
+		setup_imported_animation_player()
+	else:
+		print("GameBox character has no skeleton. Using safe upright root motion only.")
+
+func setup_imported_animation_player():
+	if imported_player_model == null or imported_skeleton == null:
+		return
+	var source_instance = create_locked_animation_instance()
+	if source_instance == null:
+		imported_animation_status = "Animation: UAL missing"
+		asset_debug_text = "Character: LockedCharacter.tscn • no animation pack"
+		return
+	var source_player = find_first_animation_player(source_instance)
+	var source_skeleton = find_first_skeleton(source_instance)
+	if source_player == null:
+		imported_animation_status = "Animation: no AnimationPlayer"
+		asset_debug_text = "Character: LockedCharacter.tscn • no anim player"
+		source_instance.queue_free()
+		return
+	if source_skeleton == null:
+		print("GameBox animation source skeleton not found; trying direct copy anyway.")
+	imported_animation_player = AnimationPlayer.new()
+	imported_animation_player.name = "GameBoxRetargetedAnimationPlayer"
+	imported_player_model.add_child(imported_animation_player)
+	# Animation track paths are relative to this root. Keeping root at the imported model
+	# lets us rewrite source skeleton paths to the real character skeleton path.
+	imported_animation_player.root_node = NodePath("..")
+	var lib = AnimationLibrary.new()
+	var installed = 0
+	var anim_names = source_player.get_animation_list()
+	for anim_name in anim_names:
+		var anim = source_player.get_animation(anim_name)
+		if anim == null:
+			continue
+		var copy = anim.duplicate(true)
+		retarget_animation_tracks(copy, source_skeleton, imported_skeleton)
+		lib.add_animation(anim_name, copy)
+		installed += 1
+	if installed <= 0:
+		imported_animation_status = "Animation: empty UAL"
+		asset_debug_text = "Character: LockedCharacter.tscn • empty animation"
+		source_instance.queue_free()
+		return
+	imported_animation_player.add_animation_library("", lib)
+	choose_imported_animation_names(anim_names)
+	if imported_run_animation != "":
+		play_imported_animation(imported_run_animation)
+	imported_animation_status = "Animation: UAL %d clips" % installed
+	asset_debug_text = "Character: LockedCharacter.tscn • " + imported_animation_status
+	print("GameBox UAL animations installed: ", installed, " run=", imported_run_animation, " idle=", imported_idle_animation)
+	source_instance.queue_free()
+
+func create_locked_animation_instance():
+	var paths = [
+		"res://scenes/LockedAnimations.tscn",
+		"res://assets/gamebox_locked/animations/quaternius_ual/active/UAL_Standard.glb"
+	]
+	for path in paths:
+		var res = load(path)
+		if res == null:
+			continue
+		if res is PackedScene:
+			var node = res.instantiate()
+			node.name = "GameBoxAnimationSource"
+			add_child(node)
+			node.visible = false
+			node.position = Vector3(9999, 9999, 9999)
+			print("GameBox animation source loaded: ", path)
+			return node
+	return null
+
+func find_first_animation_player(node):
+	if node is AnimationPlayer:
+		return node
+	for child in node.get_children():
+		var found = find_first_animation_player(child)
+		if found != null:
+			return found
+	return null
+
+func retarget_animation_tracks(anim, source_skeleton, target_skeleton):
+	if anim == null or target_skeleton == null:
+		return
+	var target_path = str(imported_player_model.get_path_to(target_skeleton))
+	var source_name = ""
+	if source_skeleton != null:
+		source_name = str(source_skeleton.name)
+	for i in range(anim.get_track_count()):
+		var original = str(anim.track_get_path(i))
+		var colon = original.find(":")
+		if colon < 0:
+			continue
+		var prop_part = original.substr(colon)
+		# Bone tracks usually look like SomeRig/Skeleton3D:BoneName or Skeleton3D:BoneName.
+		# We keep the bone/property part and redirect only the skeleton node part.
+		if source_name == "" or original.find(source_name) >= 0 or original.to_lower().find("skeleton") >= 0 or prop_part.find(":") == 0:
+			anim.track_set_path(i, NodePath(target_path + prop_part))
+
+func choose_imported_animation_names(anim_names):
+	imported_run_animation = pick_animation_name(anim_names, ["run", "jog", "sprint", "move_forward", "walking", "walk"] )
+	imported_idle_animation = pick_animation_name(anim_names, ["idle", "stand"] )
+	imported_jump_animation = pick_animation_name(anim_names, ["jump", "fall", "air"] )
+	imported_slide_animation = pick_animation_name(anim_names, ["slide", "crouch", "duck", "roll"] )
+
+func pick_animation_name(anim_names, keywords):
+	for key in keywords:
+		for name in anim_names:
+			if str(name).to_lower().find(key) >= 0:
+				return str(name)
+	return ""
+
+func play_imported_animation(name):
+	if imported_animation_player == null or name == "" or imported_current_anim == name:
+		return
+	if imported_animation_player.has_animation(name):
+		imported_animation_player.play(name)
+		imported_current_anim = name
+
 
 func find_first_skeleton(node):
 	if node is Skeleton3D:
@@ -344,15 +476,24 @@ func set_imported_bone_pose(key, x, y, z):
 func animate_imported_character(delta):
 	if imported_player_model == null:
 		return
-	# Phase 5A.8.1: Do not rotate imported bones. Keep the model upright and add only
-	# subtle root motion. The visible movement still comes from player_body bob/lean.
-	# This prevents upside-down / folded character bugs on Android exports.
+	# Real animation first. If retarget succeeds, play UAL clips. If not, stay upright
+	# and only use subtle root motion. No unsafe bone guessing.
+	if imported_animation_player != null:
+		if slide_timer > 0.0 and imported_slide_animation != "":
+			play_imported_animation(imported_slide_animation)
+		elif not on_ground and imported_jump_animation != "":
+			play_imported_animation(imported_jump_animation)
+		elif on_ground and imported_run_animation != "":
+			play_imported_animation(imported_run_animation)
+		elif imported_idle_animation != "":
+			play_imported_animation(imported_idle_animation)
+		if imported_animation_player.current_animation != "" and imported_animation_player.is_playing() == false:
+			imported_animation_player.play(imported_animation_player.current_animation)
+	else:
+		var pulse = 0.018 * abs(sin(run_cycle)) if on_ground and slide_timer <= 0.0 else 0.0
+		imported_player_model.position.y = lerp(imported_player_model.position.y, pulse, min(delta * 10.0, 1.0))
 	imported_player_model.rotation_degrees.x = lerp(imported_player_model.rotation_degrees.x, 0.0, min(delta * 14.0, 1.0))
 	imported_player_model.rotation_degrees.z = lerp(imported_player_model.rotation_degrees.z, 0.0, min(delta * 14.0, 1.0))
-	# Keep model forward-facing relative to the road. The parent handles lane lean.
-	# A tiny vertical pulse gives life without touching the skeleton.
-	var pulse = 0.018 * abs(sin(run_cycle)) if on_ground and slide_timer <= 0.0 else 0.0
-	imported_player_model.position.y = lerp(imported_player_model.position.y, pulse, min(delta * 10.0, 1.0))
 
 
 func scan_asset_dir(dir_path):
@@ -1055,6 +1196,8 @@ func update_hud():
 	hud_label.text = "%s\nScore: %d   Best: %d   Coins: %d\nLane: %d   Speed: %s   Difficulty: %s" % [str(config.get("gameName", "3D Runner")), score, best_score, coins, lane_index + 1, str(config.get("speed", 3)), str(config.get("difficulty", 2))]
 	if asset_mode == "locked_character_loaded":
 		hud_label.text += "\n" + asset_debug_text
+		if imported_animation_status != "":
+			hud_label.text += "\n" + imported_animation_status
 	elif asset_mode == "locked_character_pack":
 		hud_label.text += "\nAssets: Locked pack found • " + asset_debug_text
 	elif asset_mode == "gamebox_starter_pack":

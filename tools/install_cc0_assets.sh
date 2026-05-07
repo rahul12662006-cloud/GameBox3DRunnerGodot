@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # GameBox 3D Runner - deterministic locked asset installer.
-# Phase 5A.7D: LFS ZIP verification + no-space active Quaternius path.
+# Phase 5A.9: LFS character pack + Universal Animation Library extraction.
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CACHE_DIR="${ROOT_DIR}/.asset_cache"
@@ -14,10 +14,12 @@ ROAD_DIR="${LOCKED_ROOT}/road"
 OBSTACLE_DIR="${LOCKED_ROOT}/obstacles"
 ENV_DIR="${LOCKED_ROOT}/environment"
 UI_DIR="${LOCKED_ROOT}/ui"
+ANIM_DIR="${LOCKED_ROOT}/animations/quaternius_ual"
+ANIM_ACTIVE_DIR="${ANIM_DIR}/active"
 MANIFEST="${LOCKED_ROOT}/asset_status.json"
 
-mkdir -p "${CACHE_DIR}" "${PACK_DIR}" "${PLAYER_DIR}" "${ACTIVE_DIR}" "${ROAD_DIR}" "${OBSTACLE_DIR}" "${ENV_DIR}" "${UI_DIR}"
-for d in "${PACK_DIR}" "${PLAYER_DIR}" "${ACTIVE_DIR}" "${ROAD_DIR}" "${OBSTACLE_DIR}" "${ENV_DIR}" "${UI_DIR}"; do
+mkdir -p "${CACHE_DIR}" "${PACK_DIR}" "${PLAYER_DIR}" "${ACTIVE_DIR}" "${ROAD_DIR}" "${OBSTACLE_DIR}" "${ENV_DIR}" "${UI_DIR}" "${ANIM_DIR}" "${ANIM_ACTIVE_DIR}"
+for d in "${PACK_DIR}" "${PLAYER_DIR}" "${ACTIVE_DIR}" "${ROAD_DIR}" "${OBSTACLE_DIR}" "${ENV_DIR}" "${UI_DIR}" "${ANIM_DIR}" "${ANIM_ACTIVE_DIR}"; do
   touch "${d}/.gitkeep"
 done
 
@@ -31,6 +33,13 @@ GitHub Actions extracts it into:
 `assets/gamebox_locked/player/quaternius_fantasy/active/`
 
 The game loads the full outfit path written into SELECTED_PLAYER_PATH.txt.
+
+Optional animation pack:
+`assets/imported_packs/quaternius_animations.zip`
+
+The installer extracts `UAL_Standard.glb` into:
+`assets/gamebox_locked/animations/quaternius_ual/active/`
+and generates `scenes/LockedAnimations.tscn`.
 TXT
 
 count=0
@@ -120,13 +129,60 @@ quaternius_fantasy.zip
 TXT
 fi
 
+
+# Optional Quaternius Universal Animation Library.
+anim_count=0
+anim_source="none"
+anim_rel=""
+anim_zip="${PACK_DIR}/quaternius_animations.zip"
+if [[ -f "${anim_zip}" ]]; then
+  echo "Found Quaternius animation library: ${anim_zip}"
+  ls -lh "${anim_zip}"
+  file "${anim_zip}" || true
+  if head -c 64 "${anim_zip}" | grep -q "version https://git-lfs.github.com/spec"; then
+    echo "ERROR: quaternius_animations.zip is still a Git LFS pointer, not the real ZIP."
+    exit 45
+  fi
+  rm -rf "${CACHE_DIR}/quaternius_animations" "${ANIM_ACTIVE_DIR}"
+  mkdir -p "${CACHE_DIR}/quaternius_animations" "${ANIM_ACTIVE_DIR}"
+  unzip -q -o "${anim_zip}" -d "${CACHE_DIR}/quaternius_animations"
+  anim_file=$(find "${CACHE_DIR}/quaternius_animations" -type f \( -iname 'UAL_Standard.glb' -o -iname '*standard*.glb' -o -iname '*run*.glb' \) | head -n 1 || true)
+  if [[ -z "${anim_file}" ]]; then
+    echo "WARNING: Could not find UAL_Standard.glb inside animation ZIP. Animation hook will be disabled."
+    find "${CACHE_DIR}/quaternius_animations" -maxdepth 5 -type f | head -80 || true
+  else
+    cp "${anim_file}" "${ANIM_ACTIVE_DIR}/UAL_Standard.glb"
+    anim_rel="assets/gamebox_locked/animations/quaternius_ual/active/UAL_Standard.glb"
+    anim_source="quaternius_animations_zip"
+    anim_count=1
+    mkdir -p "${ROOT_DIR}/scenes"
+    cat > "${ROOT_DIR}/scenes/LockedAnimations.tscn" <<TSCN
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="PackedScene" path="res://${anim_rel}" id="1_gbx_anim"]
+
+[node name="LockedAnimations" instance=ExtResource("1_gbx_anim")]
+TSCN
+    echo "Generated animation wrapper: scenes/LockedAnimations.tscn -> res://${anim_rel}"
+  fi
+else
+  echo "No assets/imported_packs/quaternius_animations.zip found. Character will stay upright but unanimated."
+  cat > "${PACK_DIR}/README_DROP_QUATERNIUS_ANIMATIONS_ZIP_HERE.md" <<'TXT'
+Drop Quaternius Universal Animation Library here and rename it exactly:
+quaternius_animations.zip
+TXT
+fi
+
 cat > "${MANIFEST}" <<JSON
 {
-  "phase": "5A.7E",
+  "phase": "5A.9",
   "sourcePack": "${source_pack}",
   "playerModelsInstalled": ${count},
   "selectedPlayer": "${selected_rel}",
-  "lockedPlayerFolder": "assets/gamebox_locked/player/quaternius_fantasy/active"
+  "lockedPlayerFolder": "assets/gamebox_locked/player/quaternius_fantasy/active",
+  "animationSource": "${anim_source}",
+  "animationFilesInstalled": ${anim_count},
+  "selectedAnimation": "${anim_rel}"
 }
 JSON
 

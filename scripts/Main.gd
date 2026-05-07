@@ -1,7 +1,7 @@
 extends Node3D
 
 # GameBox 3D Runner - Android-safe real 3D prototype.
-# Phase 5A.10.2: Hard slide visual fix - no skeleton slide retarget, no image generation.
+# Phase 5A.11: Environment and obstacle polish - no image generation, code patch only.
 
 const LANES = [-1.65, 0.0, 1.65]
 const PLAYER_Z = 3.2
@@ -726,30 +726,39 @@ func create_asset_prop(key, x, z, scale_min := 0.65, scale_max := 1.15):
 	return group
 
 func create_materials():
-	mats["road"] = make_mat(Color(0.020, 0.024, 0.034))
-	mats["road_panel"] = make_mat(Color(0.032, 0.038, 0.055))
-	mats["road_side"] = make_mat(Color(0.48, 0.25, 1.00), true, 0.45)
-	mats["lane"] = make_mat(Color(0.72, 0.76, 0.92))
-	mats["lane_glow"] = make_mat(Color(0.70, 0.58, 1.0), true, 0.35)
+	# Phase 5A.11: clearer mobile-first art direction.
+	# Dark runner mood stays, but road/obstacles/collectibles are more readable.
+	mats["road"] = make_mat(Color(0.026, 0.031, 0.043))
+	mats["road_panel"] = make_mat(Color(0.043, 0.050, 0.066))
+	mats["road_side"] = make_mat(Color(0.62, 0.34, 1.00), true, 0.70)
+	mats["lane"] = make_mat(Color(0.88, 0.90, 1.0))
+	mats["lane_glow"] = make_mat(Color(0.86, 0.66, 1.0), true, 0.65)
 	mats["player"] = make_mat(character_color())
 	mats["player_light"] = make_mat(character_color().lightened(0.25), true, 0.10)
 	mats["player_dark"] = make_mat(Color(0.13, 0.10, 0.25))
 	mats["shoe"] = make_mat(Color(0.06, 0.055, 0.09))
-	mats["coin"] = make_mat(Color(1.0, 0.78, 0.12), true, 0.55)
-	mats["powerup"] = make_mat(Color(0.18, 0.88, 0.95), true, 0.70)
-	mats["obstacle"] = make_mat(Color(1.0, 0.20, 0.28))
-	mats["obstacle_dark"] = make_mat(Color(0.42, 0.06, 0.10))
-	mats["box"] = make_mat(Color(0.95, 0.42, 0.18))
-	mats["box_band"] = make_mat(Color(1.0, 0.78, 0.42))
-	mats["shadow"] = make_mat(Color(0.0, 0.0, 0.0, 0.48))
-	mats["env_dark"] = make_mat(Color(0.075, 0.075, 0.14))
-	mats["env_mid"] = make_mat(Color(0.11, 0.11, 0.20))
-	mats["window"] = make_mat(Color(0.48, 0.55, 0.88), true, 0.30)
+	mats["coin"] = make_mat(Color(1.0, 0.82, 0.10), true, 0.95)
+	mats["coin_edge"] = make_mat(Color(1.0, 0.55, 0.06), true, 0.45)
+	mats["powerup"] = make_mat(Color(0.16, 0.94, 1.0), true, 1.05)
+	mats["powerup_dark"] = make_mat(Color(0.02, 0.38, 0.45), true, 0.45)
+	mats["obstacle"] = make_mat(Color(1.0, 0.16, 0.25))
+	mats["obstacle_dark"] = make_mat(Color(0.32, 0.03, 0.08))
+	mats["danger_yellow"] = make_mat(Color(1.0, 0.78, 0.14), true, 0.22)
+	mats["box"] = make_mat(Color(0.95, 0.45, 0.18))
+	mats["box_band"] = make_mat(Color(1.0, 0.78, 0.42), true, 0.15)
+	mats["shadow"] = make_mat(Color(0.0, 0.0, 0.0, 0.50))
+	mats["env_dark"] = make_mat(Color(0.09, 0.095, 0.155))
+	mats["env_mid"] = make_mat(Color(0.145, 0.150, 0.235))
+	mats["env_near"] = make_mat(Color(0.19, 0.18, 0.29))
+	mats["window"] = make_mat(Color(0.78, 0.88, 1.0), true, 0.42)
+	mats["window_warm"] = make_mat(Color(1.0, 0.72, 0.35), true, 0.52)
+	mats["sidewalk"] = make_mat(Color(0.048, 0.050, 0.066))
 	mats["env_green"] = make_mat(Color(0.05, 0.32, 0.14))
 	mats["env_desert"] = make_mat(Color(0.52, 0.31, 0.14))
 	mats["env_snow"] = make_mat(Color(0.78, 0.88, 0.98))
-	mats["env_cyber"] = make_mat(Color(0.10, 0.72, 0.95), true, 0.90)
-	mats["lamp"] = make_mat(Color(1.0, 0.86, 0.52), true, 1.0)
+	mats["env_cyber"] = make_mat(Color(0.10, 0.72, 0.95), true, 0.95)
+	mats["lamp"] = make_mat(Color(1.0, 0.86, 0.52), true, 1.20)
+
 
 func make_mat(color, emission_enabled := false, emission_energy := 0.0):
 	var mat = StandardMaterial3D.new()
@@ -798,72 +807,79 @@ func create_world():
 	var e = Environment.new()
 	e.background_mode = Environment.BG_COLOR
 	match map_key():
-		"jungle": e.background_color = Color(0.015, 0.09, 0.06)
-		"desert": e.background_color = Color(0.18, 0.10, 0.045)
-		"snow": e.background_color = Color(0.10, 0.14, 0.20)
-		"cyber": e.background_color = Color(0.008, 0.010, 0.035)
-		_: e.background_color = Color(0.018, 0.022, 0.040)
+		"jungle": e.background_color = Color(0.020, 0.105, 0.075)
+		"desert": e.background_color = Color(0.20, 0.12, 0.060)
+		"snow": e.background_color = Color(0.12, 0.16, 0.235)
+		"cyber": e.background_color = Color(0.010, 0.014, 0.045)
+		_: e.background_color = Color(0.038, 0.042, 0.062)
 	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	e.ambient_light_color = Color(0.40, 0.42, 0.55)
-	e.ambient_light_energy = 0.92
+	e.ambient_light_color = Color(0.54, 0.56, 0.70)
+	e.ambient_light_energy = 1.12
 	e.fog_enabled = true
-	e.fog_density = 0.013
-	e.fog_light_color = e.background_color.lightened(0.20)
+	e.fog_density = 0.0095
+	e.fog_light_color = e.background_color.lightened(0.32)
 	env.environment = e
 	add_child(env)
 	RenderingServer.set_default_clear_color(e.background_color)
 
 	var sun = DirectionalLight3D.new()
-	sun.light_energy = 3.20
-	sun.rotation_degrees = Vector3(-58, -22, 0)
+	sun.light_energy = 3.75
+	sun.rotation_degrees = Vector3(-54, -18, 0)
 	add_child(sun)
 	var fill = OmniLight3D.new()
-	fill.position = Vector3(0, 4.2, 4.2)
-	fill.light_energy = 2.35
-	fill.omni_range = 24.0
+	fill.position = Vector3(0, 4.8, 5.2)
+	fill.light_energy = 2.55
+	fill.omni_range = 28.0
 	add_child(fill)
-	var rim = OmniLight3D.new()
-	rim.position = Vector3(0, 2.5, -12.0)
-	rim.light_energy = 1.05
-	rim.omni_range = 30.0
-	add_child(rim)
+	var road_light = OmniLight3D.new()
+	road_light.position = Vector3(0, 1.9, -9.0)
+	road_light.light_color = Color(0.76, 0.68, 1.0)
+	road_light.light_energy = 1.25
+	road_light.omni_range = 24.0
+	add_child(road_light)
 
 	create_road()
 	create_environment_props()
 
+
 func create_road():
 	road_dash_nodes.clear()
-	add_box("GroundPlane", Vector3(0, -0.09, -38), Vector3(20.0, 0.055, 74.0), make_mat(Color(0.009, 0.010, 0.018)), world_root)
+	add_box("GroundPlane", Vector3(0, -0.10, -38), Vector3(22.0, 0.055, 82.0), make_mat(Color(0.016, 0.017, 0.024)), world_root)
+	add_box("LeftSidewalk", Vector3(-4.55, -0.035, -38), Vector3(1.65, 0.070, 74.0), mats["sidewalk"], world_root)
+	add_box("RightSidewalk", Vector3(4.55, -0.035, -38), Vector3(1.65, 0.070, 74.0), mats["sidewalk"], world_root)
 
-	# Segmented road plates give visible forward motion instead of one flat slab.
-	for i in range(16):
-		var z = -84.0 + float(i) * 6.0
+	# Wider, layered road plates with small seams make speed readable without visual noise.
+	for i in range(18):
+		var z = -90.0 + float(i) * 5.6
 		var mat = mats["road"] if i % 2 == 0 else mats["road_panel"]
-		var plate = add_box("RoadPlate", Vector3(0, 0, z), Vector3(5.35, 0.08, 5.82), mat, world_root)
+		var plate = add_box("RoadPlate", Vector3(0, 0, z), Vector3(5.60, 0.082, 5.42), mat, world_root)
 		road_dash_nodes.append(plate)
+		var seam = add_box("RoadSeam", Vector3(0, 0.068, z + 2.72), Vector3(5.55, 0.018, 0.045), make_mat(Color(0.015, 0.018, 0.028)), world_root)
+		road_dash_nodes.append(seam)
 
-	add_box("LeftRail", Vector3(-3.45, 0.16, -38), Vector3(0.10, 0.13, 58.0), mats["road_side"], world_root)
-	add_box("RightRail", Vector3(3.45, 0.16, -38), Vector3(0.10, 0.13, 58.0), mats["road_side"], world_root)
-	add_box("LeftShoulder", Vector3(-3.15, 0.02, -38), Vector3(0.36, 0.04, 58.0), make_mat(Color(0.035, 0.030, 0.070)), world_root)
-	add_box("RightShoulder", Vector3(3.15, 0.02, -38), Vector3(0.36, 0.04, 58.0), make_mat(Color(0.035, 0.030, 0.070)), world_root)
+	add_box("LeftRail", Vector3(-3.35, 0.19, -38), Vector3(0.105, 0.155, 64.0), mats["road_side"], world_root)
+	add_box("RightRail", Vector3(3.35, 0.19, -38), Vector3(0.105, 0.155, 64.0), mats["road_side"], world_root)
+	add_box("LeftCurb", Vector3(-2.88, 0.055, -38), Vector3(0.16, 0.080, 64.0), mats["env_mid"], world_root)
+	add_box("RightCurb", Vector3(2.88, 0.055, -38), Vector3(0.16, 0.080, 64.0), mats["env_mid"], world_root)
 
 	for x in [-0.83, 0.83]:
-		add_box("LaneLine", Vector3(x, 0.14, -38), Vector3(0.025, 0.035, 58.0), mats["lane"], world_root)
-	for z in range(-88, 8, 4):
-		var dash = add_box("CenterDash", Vector3(0, 0.18, float(z)), Vector3(0.10, 0.035, 0.42), mats["lane_glow"], world_root)
+		add_box("LaneLine", Vector3(x, 0.145, -38), Vector3(0.025, 0.035, 64.0), mats["lane"], world_root)
+	for z in range(-90, 10, 4):
+		var dash = add_box("CenterDash", Vector3(0, 0.19, float(z)), Vector3(0.11, 0.038, 0.48), mats["lane_glow"], world_root)
 		road_dash_nodes.append(dash)
-	for side_x in [-2.40, 2.40]:
-		for z in range(-88, 8, 5):
-			var side_dash = add_box("EdgeDash", Vector3(side_x, 0.18, float(z)), Vector3(0.055, 0.035, 0.72), mats["road_side"], world_root)
+	for side_x in [-2.32, 2.32]:
+		for z in range(-90, 10, 5):
+			var side_dash = add_box("EdgeDash", Vector3(side_x, 0.185, float(z)), Vector3(0.065, 0.035, 0.82), mats["road_side"], world_root)
 			road_dash_nodes.append(side_dash)
+
 
 func create_environment_props():
 	env_motion_nodes.clear()
 	var key = map_key()
-	for i in range(34):
-		var z = -92.0 + float(i) * 4.1
-		var left_x = -5.9 - randf() * 1.2
-		var right_x = 5.9 + randf() * 1.2
+	for i in range(40):
+		var z = -98.0 + float(i) * 3.85
+		var left_x = -5.35 - randf() * 1.65
+		var right_x = 5.35 + randf() * 1.65
 		match key:
 			"jungle":
 				if create_asset_prop("environment", left_x, z, 0.55, 1.05) == null:
@@ -883,17 +899,22 @@ func create_environment_props():
 			"cyber":
 				create_neon_gate(z)
 			_:
-				if has_asset("building") and randf() > 0.25:
-					create_asset_prop("building", left_x, z, 0.55, 1.15)
+				if has_asset("building") and randf() > 0.20:
+					create_asset_prop("building", left_x, z, 0.55, 1.12)
 				else:
 					create_building(left_x, z)
-				if has_asset("building") and randf() > 0.25:
-					create_asset_prop("building", right_x, z + 2.0, 0.55, 1.15)
+				if has_asset("building") and randf() > 0.20:
+					create_asset_prop("building", right_x, z + 2.0, 0.55, 1.12)
 				else:
 					create_building(right_x, z + 2.0)
-		if has_asset("lamp") and i % 3 == 0:
+		# Always provide readable side lights; asset lamps are optional extras.
+		if i % 2 == 0:
+			create_street_light(-3.92, z + 0.9)
+			create_street_light(3.92, z + 2.4)
+		elif has_asset("lamp") and i % 3 == 0:
 			create_asset_prop("lamp", -3.95, z + 0.9, 0.55, 0.90)
 			create_asset_prop("lamp", 3.95, z + 2.4, 0.55, 0.90)
+
 
 func create_prop_group(name, x, z):
 	var group = Node3D.new()
@@ -905,20 +926,28 @@ func create_prop_group(name, x, z):
 
 func create_building(x, z):
 	var group = create_prop_group("BuildingGroup", x, z)
-	var h = randf_range(2.0, 6.2)
-	var w = randf_range(0.60, 1.15)
-	add_box("Building", Vector3(0, h * 0.5, 0), Vector3(w, h, randf_range(0.70, 1.18)), mats["env_dark"], group)
-	var floors = clamp(int(h * 1.35), 3, 9)
+	var h = randf_range(2.6, 7.4)
+	var w = randf_range(0.70, 1.35)
+	var mat = mats["env_near"] if abs(x) < 6.0 and randf() > 0.40 else mats["env_dark"]
+	add_box("Building", Vector3(0, h * 0.5, 0), Vector3(w, h, randf_range(0.78, 1.32)), mat, group)
+	# Roof cap and side strip break up the old flat rectangle look.
+	add_box("RoofCap", Vector3(0, h + 0.05, 0), Vector3(w * 1.08, 0.10, 0.94), mats["env_mid"], group)
+	if randf() > 0.45:
+		add_box("NeonSideStrip", Vector3(sign(x) * -w * 0.47, h * 0.52, -0.53), Vector3(0.035, h * 0.58, 0.026), mats["road_side"], group)
+	var floors = clamp(int(h * 1.45), 4, 11)
 	for f in range(floors):
-		if randf() > 0.32:
-			var y = 0.65 + float(f) * 0.45
-			add_box("Window", Vector3(-w * 0.18, y, -0.60), Vector3(0.10, 0.055, 0.018), mats["window"], group)
-			add_box("Window", Vector3(w * 0.18, y, -0.60), Vector3(0.10, 0.055, 0.018), mats["window"], group)
-	# occasional street light / sign for depth and premium feel
-	if randf() > 0.62:
-		var lamp_x = -sign(x) * 1.15
-		add_cylinder("LampPost", Vector3(lamp_x, 0.75, 0.15), 0.025, 1.5, mats["lane"], group)
-		add_sphere("Lamp", Vector3(lamp_x, 1.55, 0.15), Vector3(0.12, 0.12, 0.12), mats["lamp"], group)
+		if randf() > 0.22:
+			var y = 0.70 + float(f) * 0.43
+			var win_mat = mats["window_warm"] if randf() > 0.72 else mats["window"]
+			add_box("Window", Vector3(-w * 0.22, y, -0.62), Vector3(0.105, 0.058, 0.020), win_mat, group)
+			add_box("Window", Vector3(w * 0.22, y, -0.62), Vector3(0.105, 0.058, 0.020), win_mat, group)
+
+func create_street_light(x, z):
+	var group = create_prop_group("StreetLight", x, z)
+	add_cylinder("LampPost", Vector3(0, 0.82, 0), 0.018, 1.64, mats["lane"], group)
+	add_box("LampArm", Vector3(-sign(x) * 0.18, 1.56, 0), Vector3(0.34, 0.025, 0.035), mats["lane"], group)
+	add_sphere("LampGlow", Vector3(-sign(x) * 0.34, 1.54, 0), Vector3(0.085, 0.085, 0.085), mats["lamp"], group)
+
 
 func create_tree(x, z):
 	var group = create_prop_group("TreeGroup", x, z)
@@ -1388,31 +1417,39 @@ func create_item_node(kind):
 			return root
 	match kind:
 		"coin":
-			add_cylinder("Coin", Vector3.ZERO, 0.22, 0.08, mats["coin"], root).rotation_degrees.x = 90
-			add_sphere("CoinGlow", Vector3.ZERO, Vector3(0.30, 0.30, 0.04), mats["coin"], root)
+			var coin = add_cylinder("Coin", Vector3.ZERO, 0.24, 0.075, mats["coin"], root)
+			coin.rotation_degrees.x = 90
+			add_cylinder("CoinEdge", Vector3.ZERO, 0.27, 0.028, mats["coin_edge"], root).rotation_degrees.x = 90
+			add_sphere("CoinGlow", Vector3.ZERO, Vector3(0.42, 0.42, 0.055), mats["coin"], root)
 		"powerup":
-			add_sphere("PowerCore", Vector3.ZERO, Vector3(0.23, 0.23, 0.23), mats["powerup"], root)
-			add_cylinder("PowerRing", Vector3.ZERO, 0.32, 0.035, mats["powerup"], root).rotation_degrees.x = 90
+			add_sphere("PowerCore", Vector3.ZERO, Vector3(0.22, 0.22, 0.22), mats["powerup"], root)
+			add_cylinder("PowerRingA", Vector3.ZERO, 0.34, 0.030, mats["powerup"], root).rotation_degrees.x = 90
+			add_cylinder("PowerRingB", Vector3.ZERO, 0.27, 0.026, mats["powerup_dark"], root).rotation_degrees.z = 90
 		"gate":
-			add_box("GateTop", Vector3(0, 0, 0), Vector3(0.80, 0.12, 0.14), mats["powerup"], root)
-			add_box("GateL", Vector3(-0.40, -0.66, 0), Vector3(0.07, 1.12, 0.09), mats["powerup"], root)
-			add_box("GateR", Vector3(0.40, -0.66, 0), Vector3(0.07, 1.12, 0.09), mats["powerup"], root)
+			add_box("GateTop", Vector3(0, 0.06, 0), Vector3(1.08, 0.12, 0.16), mats["powerup"], root)
+			add_box("GateL", Vector3(-0.52, -0.66, 0), Vector3(0.08, 1.18, 0.10), mats["powerup"], root)
+			add_box("GateR", Vector3(0.52, -0.66, 0), Vector3(0.08, 1.18, 0.10), mats["powerup"], root)
+			add_box("GateWarning", Vector3(0, -0.05, -0.10), Vector3(0.55, 0.045, 0.025), mats["danger_yellow"], root)
 		"ramp":
-			add_box("RampBase", Vector3(0, -0.02, 0), Vector3(0.70, 0.20, 0.64), mats["box"], root)
-			add_box("RampStripe", Vector3(0, 0.12, -0.18), Vector3(0.56, 0.028, 0.06), mats["box_band"], root)
+			add_box("RampBase", Vector3(0, -0.02, 0), Vector3(0.78, 0.22, 0.70), mats["box"], root)
+			add_box("RampStripe", Vector3(0, 0.13, -0.20), Vector3(0.62, 0.032, 0.065), mats["box_band"], root)
 			root.rotation_degrees.x = -12
 		"cone":
-			add_cylinder("Cone", Vector3(0, 0.0, 0), 0.22, 0.58, mats["obstacle"], root)
-			add_box("ConeStripe", Vector3(0, 0.05, -0.22), Vector3(0.26, 0.035, 0.018), mats["box_band"], root)
+			add_tapered_cylinder("ConeBody", Vector3(0, 0.02, 0), 0.06, 0.24, 0.64, mats["obstacle"], root)
+			add_box("ConeBase", Vector3(0, -0.34, 0), Vector3(0.46, 0.07, 0.46), mats["obstacle_dark"], root)
+			add_box("ConeStripe", Vector3(0, -0.02, -0.21), Vector3(0.28, 0.036, 0.020), mats["box_band"], root)
 		"barrier":
-			add_box("Barrier", Vector3(0, 0.02, 0), Vector3(0.82, 0.40, 0.18), mats["obstacle"], root)
-			add_box("BarrierStripe", Vector3(0, 0.12, -0.11), Vector3(0.70, 0.05, 0.025), mats["box_band"], root)
-			add_box("BarrierBase", Vector3(0, -0.26, 0), Vector3(0.90, 0.08, 0.28), mats["obstacle_dark"], root)
+			add_box("BarrierMain", Vector3(0, 0.10, 0), Vector3(0.92, 0.34, 0.16), mats["obstacle"], root)
+			add_box("BarrierStripeA", Vector3(-0.22, 0.13, -0.105), Vector3(0.26, 0.055, 0.025), mats["box_band"], root)
+			add_box("BarrierStripeB", Vector3(0.22, 0.13, -0.105), Vector3(0.26, 0.055, 0.025), mats["box_band"], root)
+			add_box("BarrierBase", Vector3(0, -0.18, 0), Vector3(1.00, 0.08, 0.30), mats["obstacle_dark"], root)
 		_:
-			add_box("Crate", Vector3.ZERO, Vector3(0.58, 0.58, 0.58), mats["box"], root)
-			add_box("CrateBandH", Vector3(0, 0.02, -0.31), Vector3(0.60, 0.055, 0.025), mats["box_band"], root)
-			add_box("CrateBandV", Vector3(0.18, 0.02, -0.32), Vector3(0.055, 0.58, 0.025), mats["box_band"], root)
+			add_box("Crate", Vector3.ZERO, Vector3(0.62, 0.62, 0.62), mats["box"], root)
+			add_box("CrateTop", Vector3(0, 0.33, 0), Vector3(0.66, 0.045, 0.66), mats["box_band"], root)
+			add_box("CrateBandH", Vector3(0, 0.02, -0.33), Vector3(0.64, 0.060, 0.028), mats["box_band"], root)
+			add_box("CrateBandV", Vector3(0.20, 0.02, -0.34), Vector3(0.060, 0.62, 0.028), mats["box_band"], root)
 	return root
+
 
 func collision_window_for(kind):
 	match kind:
@@ -1565,6 +1602,20 @@ func add_cylinder(name, pos, radius, height, mat, parent):
 	mesh.bottom_radius = radius
 	mesh.height = height
 	mesh.radial_segments = 16
+	var node = MeshInstance3D.new()
+	node.name = name
+	node.mesh = mesh
+	node.position = pos
+	node.material_override = mat
+	parent.add_child(node)
+	return node
+
+func add_tapered_cylinder(name, pos, top_radius, bottom_radius, height, mat, parent):
+	var mesh = CylinderMesh.new()
+	mesh.top_radius = top_radius
+	mesh.bottom_radius = bottom_radius
+	mesh.height = height
+	mesh.radial_segments = 18
 	var node = MeshInstance3D.new()
 	node.name = name
 	node.mesh = mesh

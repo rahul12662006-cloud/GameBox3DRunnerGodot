@@ -1,7 +1,7 @@
 extends Node3D
 
 # GameBox 3D Runner - Android-safe real 3D prototype.
-# Phase 5A.10: Runner gameplay + camera polish.
+# Phase 5A.10.1: Slide animation safety + next gameplay polish.
 
 const LANES = [-1.65, 0.0, 1.65]
 const PLAYER_Z = 3.2
@@ -518,8 +518,11 @@ func animate_imported_character(delta):
 	# and only use subtle root motion. No unsafe bone guessing.
 	if imported_animation_player != null:
 		var target_anim = ""
-		if slide_timer > 0.0 and imported_slide_animation != "":
-			target_anim = imported_slide_animation
+		if slide_timer > 0.0:
+			# Phase 5A.10.1: many generic slide/crouch clips do not retarget cleanly
+			# to this Quaternius outfit and can fold the character. Keep the run clip
+			# active and use root lean/lower motion for a stable slide.
+			target_anim = imported_run_animation if imported_run_animation != "" else imported_idle_animation
 		elif not on_ground and imported_jump_animation != "":
 			target_anim = imported_jump_animation
 		elif on_ground and imported_run_animation != "":
@@ -535,7 +538,11 @@ func animate_imported_character(delta):
 		var pulse = 0.018 * abs(sin(run_cycle)) if on_ground and slide_timer <= 0.0 else 0.0
 		imported_player_model.position.y = lerp(imported_player_model.position.y, pulse, min(delta * 10.0, 1.0))
 	var forward_pitch = -4.5 if on_ground and slide_timer <= 0.0 else 0.0
-	imported_player_model.rotation_degrees.x = lerp(imported_player_model.rotation_degrees.x, forward_pitch, min(delta * 14.0, 1.0))
+	if slide_timer > 0.0:
+		forward_pitch = -18.0
+	elif not on_ground:
+		forward_pitch = -2.0
+	imported_player_model.rotation_degrees.x = lerp(imported_player_model.rotation_degrees.x, forward_pitch, min(delta * 12.0, 1.0))
 	imported_player_model.rotation_degrees.z = lerp(imported_player_model.rotation_degrees.z, 0.0, min(delta * 14.0, 1.0))
 
 
@@ -1141,8 +1148,16 @@ func update_player(delta):
 
 	if slide_timer > 0.0:
 		slide_timer -= delta
-		player_body.scale.y = lerp(player_body.scale.y, 0.58, min(delta * 16.0, 1.0))
-		player_body.position.y = lerp(player_body.position.y, -0.18, min(delta * 16.0, 1.0))
+		# Phase 5A.10.1: imported humanoid models look broken when their whole Y scale
+		# is crushed. Keep them upright/full height and create a slide feel by lowering
+		# the root plus a safe forward lean in animate_imported_character(). The gameplay
+		# slide hitbox still uses slide_timer, so gates remain passable.
+		if imported_player_model != null:
+			player_body.scale.y = lerp(player_body.scale.y, 1.0, min(delta * 16.0, 1.0))
+			player_body.position.y = lerp(player_body.position.y, -0.33, min(delta * 16.0, 1.0))
+		else:
+			player_body.scale.y = lerp(player_body.scale.y, 0.62, min(delta * 16.0, 1.0))
+			player_body.position.y = lerp(player_body.position.y, -0.16, min(delta * 16.0, 1.0))
 	else:
 		player_body.scale.y = lerp(player_body.scale.y, 1.0, min(delta * 14.0, 1.0))
 		player_body.position.y = lerp(player_body.position.y, run_bob, min(delta * 14.0, 1.0))

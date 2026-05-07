@@ -1,7 +1,7 @@
 extends Node3D
 
 # GameBox 3D Runner - Android-safe real 3D prototype.
-# Phase 5A.9: Universal Animation Library hook + safe upright fallback.
+# Phase 5A.9.1: Run animation speed/selection fix.
 
 const LANES = [-1.65, 0.0, 1.65]
 const PLAYER_Z = 3.2
@@ -82,6 +82,8 @@ var imported_idle_animation = ""
 var imported_jump_animation = ""
 var imported_slide_animation = ""
 var imported_current_anim = ""
+var imported_run_speed_multiplier = 2.25
+var imported_walk_as_run = false
 
 func _ready():
 	randomize()
@@ -281,6 +283,8 @@ func prepare_imported_character_visual(model):
 	imported_jump_animation = ""
 	imported_slide_animation = ""
 	imported_current_anim = ""
+	imported_run_speed_multiplier = 2.25
+	imported_walk_as_run = false
 	asset_debug_text = "Character: LockedCharacter.tscn • safe upright"
 	if imported_skeleton != null:
 		print("GameBox character skeleton found: ", imported_skeleton.name, " bones=", imported_skeleton.get_bone_count())
@@ -331,7 +335,7 @@ func setup_imported_animation_player():
 	choose_imported_animation_names(anim_names)
 	if imported_run_animation != "":
 		play_imported_animation(imported_run_animation)
-	imported_animation_status = "Animation: UAL %d clips" % installed
+	imported_animation_status = "Animation: UAL %d clips • run x%.1f" % [installed, imported_run_speed_multiplier]
 	asset_debug_text = "Character: LockedCharacter.tscn • " + imported_animation_status
 	print("GameBox UAL animations installed: ", installed, " run=", imported_run_animation, " idle=", imported_idle_animation)
 	source_instance.queue_free()
@@ -383,10 +387,26 @@ func retarget_animation_tracks(anim, source_skeleton, target_skeleton):
 			anim.track_set_path(i, NodePath(target_path + prop_part))
 
 func choose_imported_animation_names(anim_names):
-	imported_run_animation = pick_animation_name(anim_names, ["run", "jog", "sprint", "move_forward", "walking", "walk"] )
-	imported_idle_animation = pick_animation_name(anim_names, ["idle", "stand"] )
-	imported_jump_animation = pick_animation_name(anim_names, ["jump", "fall", "air"] )
+	# Phase 5A.9.1: prefer real run/sprint clips first. If the library only exposes
+	# a walk/locomotion clip, use it as a temporary run and speed it up.
+	imported_run_animation = pick_best_run_animation(anim_names)
+	imported_idle_animation = pick_animation_name(anim_names, ["idle", "stand", "rest"] )
+	imported_jump_animation = pick_animation_name(anim_names, ["jump", "leap", "fall", "air"] )
 	imported_slide_animation = pick_animation_name(anim_names, ["slide", "crouch", "duck", "roll"] )
+	var lower = imported_run_animation.to_lower()
+	imported_walk_as_run = lower.find("walk") >= 0 or lower.find("locomotion") >= 0
+	imported_run_speed_multiplier = 2.35 if imported_walk_as_run else 1.55
+	print("GameBox animation selection: run=", imported_run_animation, " walk_as_run=", imported_walk_as_run, " speed=", imported_run_speed_multiplier)
+
+func pick_best_run_animation(anim_names):
+	var preferred = ["sprint", "running", "run", "jogging", "jog"]
+	for key in preferred:
+		for name in anim_names:
+			var lower = str(name).to_lower()
+			if lower.find(key) >= 0:
+				return str(name)
+	# Fallback: a walk clip is better than T-pose. We speed it up in play_imported_animation().
+	return pick_animation_name(anim_names, ["walk", "walking", "locomotion", "move_forward", "forward"] )
 
 func pick_animation_name(anim_names, keywords):
 	for key in keywords:
@@ -395,12 +415,25 @@ func pick_animation_name(anim_names, keywords):
 				return str(name)
 	return ""
 
+func imported_anim_speed_for(name):
+	if name == "":
+		return 1.0
+	if name == imported_run_animation:
+		return imported_run_speed_multiplier
+	if name == imported_jump_animation:
+		return 1.25
+	if name == imported_slide_animation:
+		return 1.35
+	return 1.0
+
 func play_imported_animation(name):
-	if imported_animation_player == null or name == "" or imported_current_anim == name:
+	if imported_animation_player == null or name == "":
 		return
 	if imported_animation_player.has_animation(name):
-		imported_animation_player.play(name)
-		imported_current_anim = name
+		imported_animation_player.speed_scale = imported_anim_speed_for(name)
+		if imported_current_anim != name:
+			imported_animation_player.play(name)
+			imported_current_anim = name
 
 
 func find_first_skeleton(node):
@@ -479,20 +512,25 @@ func animate_imported_character(delta):
 	# Real animation first. If retarget succeeds, play UAL clips. If not, stay upright
 	# and only use subtle root motion. No unsafe bone guessing.
 	if imported_animation_player != null:
+		var target_anim = ""
 		if slide_timer > 0.0 and imported_slide_animation != "":
-			play_imported_animation(imported_slide_animation)
+			target_anim = imported_slide_animation
 		elif not on_ground and imported_jump_animation != "":
-			play_imported_animation(imported_jump_animation)
+			target_anim = imported_jump_animation
 		elif on_ground and imported_run_animation != "":
-			play_imported_animation(imported_run_animation)
+			target_anim = imported_run_animation
 		elif imported_idle_animation != "":
-			play_imported_animation(imported_idle_animation)
-		if imported_animation_player.current_animation != "" and imported_animation_player.is_playing() == false:
-			imported_animation_player.play(imported_animation_player.current_animation)
+			target_anim = imported_idle_animation
+		play_imported_animation(target_anim)
+		if imported_animation_player.current_animation != "":
+			imported_animation_player.speed_scale = imported_anim_speed_for(imported_animation_player.current_animation)
+			if imported_animation_player.is_playing() == false:
+				imported_animation_player.play(imported_animation_player.current_animation)
 	else:
 		var pulse = 0.018 * abs(sin(run_cycle)) if on_ground and slide_timer <= 0.0 else 0.0
 		imported_player_model.position.y = lerp(imported_player_model.position.y, pulse, min(delta * 10.0, 1.0))
-	imported_player_model.rotation_degrees.x = lerp(imported_player_model.rotation_degrees.x, 0.0, min(delta * 14.0, 1.0))
+	var forward_pitch = -4.5 if on_ground and slide_timer <= 0.0 else 0.0
+	imported_player_model.rotation_degrees.x = lerp(imported_player_model.rotation_degrees.x, forward_pitch, min(delta * 14.0, 1.0))
 	imported_player_model.rotation_degrees.z = lerp(imported_player_model.rotation_degrees.z, 0.0, min(delta * 14.0, 1.0))
 
 

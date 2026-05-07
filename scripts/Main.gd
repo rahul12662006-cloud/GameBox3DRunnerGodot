@@ -1007,22 +1007,13 @@ func create_hard_slide_visual():
 		slide_visual_trails.append(streak)
 
 func update_hard_slide_visual(delta):
-	if slide_visual_root == null:
-		return
-	var active = slide_timer > 0.0 and imported_player_model != null
-	slide_visual_root.visible = active
+	# Phase 5A.10.3: do NOT replace the real imported character with the old purple
+	# capsule slide visual. That looked like a fallback bug. Keep the real character
+	# visible and use gameplay hitbox + small camera/feedback only.
 	if imported_player_model != null:
-		imported_player_model.visible = not active
-	if active:
-		slide_visual_root.position.y = lerp(slide_visual_root.position.y, 0.0, min(delta * 18.0, 1.0))
-		slide_visual_root.rotation_degrees.x = lerp(slide_visual_root.rotation_degrees.x, -3.0, min(delta * 18.0, 1.0))
-		slide_visual_root.rotation_degrees.z = lerp(slide_visual_root.rotation_degrees.z, sin(run_cycle * 0.65) * 2.0, min(delta * 14.0, 1.0))
-		for i in range(slide_visual_trails.size()):
-			var streak = slide_visual_trails[i]
-			if is_instance_valid(streak):
-				streak.position.z = 0.58 + float(i) * 0.16 + fmod(run_cycle * 0.06, 0.18)
-	else:
-		slide_visual_root.rotation_degrees = slide_visual_root.rotation_degrees.lerp(Vector3.ZERO, min(delta * 10.0, 1.0))
+		imported_player_model.visible = true
+	if slide_visual_root != null:
+		slide_visual_root.visible = false
 
 func create_camera():
 	camera = Camera3D.new()
@@ -1193,15 +1184,15 @@ func update_player(delta):
 
 	if slide_timer > 0.0:
 		slide_timer -= delta
-		# Phase 5A.10.2: hard slide visual. The real Quaternius character stays hidden
-		# during slide to avoid broken crouch retargeting, and a stable low slide model
-		# shows instead. The gameplay hitbox still uses slide_timer for gates.
+		# Phase 5A.10.3: keep real character visible during slide. No fallback capsule,
+		# no bone retarget crouch. Only hitbox changes for gates.
 		if imported_player_model != null:
+			imported_player_model.visible = true
 			player_body.scale.y = lerp(player_body.scale.y, 1.0, min(delta * 16.0, 1.0))
-			player_body.position.y = lerp(player_body.position.y, run_bob * 0.35, min(delta * 16.0, 1.0))
+			player_body.position.y = lerp(player_body.position.y, run_bob * 0.25, min(delta * 16.0, 1.0))
 		else:
-			player_body.scale.y = lerp(player_body.scale.y, 0.62, min(delta * 16.0, 1.0))
-			player_body.position.y = lerp(player_body.position.y, -0.16, min(delta * 16.0, 1.0))
+			player_body.scale.y = lerp(player_body.scale.y, 0.78, min(delta * 16.0, 1.0))
+			player_body.position.y = lerp(player_body.position.y, -0.08, min(delta * 16.0, 1.0))
 	else:
 		if imported_player_model != null:
 			imported_player_model.visible = true

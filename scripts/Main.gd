@@ -1,7 +1,7 @@
 extends Node3D
 
 # GameBox 3D Runner - Android-safe real 3D prototype.
-# Phase 5A.9.1: Run animation speed/selection fix.
+# Phase 5A.10: Runner gameplay + camera polish.
 
 const LANES = [-1.65, 0.0, 1.65]
 const PLAYER_Z = 3.2
@@ -84,6 +84,11 @@ var imported_slide_animation = ""
 var imported_current_anim = ""
 var imported_run_speed_multiplier = 2.25
 var imported_walk_as_run = false
+var last_spawn_lane = 1
+var lane_change_flash_timer = 0.0
+var combo_bonus = 0
+var near_miss_timer = 0.0
+var camera_base_fov = 72.0
 
 func _ready():
 	randomize()
@@ -1004,20 +1009,20 @@ func create_game_ui():
 	feedback_label.text = ""
 	root.add_child(feedback_label)
 
-	pause_button = make_button("Pause", 0.80, 0.035, 0.955, 0.085)
+	pause_button = make_button("II", 0.835, 0.030, 0.945, 0.082)
 	pause_button.pressed.connect(toggle_pause)
 	root.add_child(pause_button)
 
-	var left_btn = make_button("◀", 0.05, 0.885, 0.20, 0.945)
+	var left_btn = make_button("◀", 0.045, 0.900, 0.190, 0.955)
 	left_btn.pressed.connect(lane_left)
 	root.add_child(left_btn)
-	var right_btn = make_button("▶", 0.80, 0.885, 0.95, 0.945)
+	var right_btn = make_button("▶", 0.810, 0.900, 0.955, 0.955)
 	right_btn.pressed.connect(lane_right)
 	root.add_child(right_btn)
-	var jump_btn = make_button("JUMP", 0.33, 0.890, 0.48, 0.945)
+	var jump_btn = make_button("JUMP", 0.335, 0.900, 0.485, 0.955)
 	jump_btn.pressed.connect(jump)
 	root.add_child(jump_btn)
-	var slide_btn = make_button("SLIDE", 0.52, 0.890, 0.67, 0.945)
+	var slide_btn = make_button("SLIDE", 0.515, 0.900, 0.665, 0.955)
 	slide_btn.pressed.connect(slide)
 	root.add_child(slide_btn)
 
@@ -1049,20 +1054,20 @@ func make_button(text, l, t, r, b):
 	btn.anchor_top = t
 	btn.anchor_right = r
 	btn.anchor_bottom = b
-	btn.add_theme_font_size_override("font_size", 16)
+	btn.add_theme_font_size_override("font_size", 14)
 	btn.add_theme_color_override("font_color", Color(0.94, 0.92, 1.0, 0.92))
-	btn.add_theme_stylebox_override("normal", button_style(Color(0.045, 0.045, 0.070, 0.46)))
-	btn.add_theme_stylebox_override("hover", button_style(Color(0.20, 0.14, 0.35, 0.58)))
-	btn.add_theme_stylebox_override("pressed", button_style(Color(0.50, 0.32, 0.95, 0.72)))
+	btn.add_theme_stylebox_override("normal", button_style(Color(0.035, 0.035, 0.055, 0.34)))
+	btn.add_theme_stylebox_override("hover", button_style(Color(0.22, 0.16, 0.38, 0.50)))
+	btn.add_theme_stylebox_override("pressed", button_style(Color(0.54, 0.34, 0.98, 0.72)))
 	return btn
 
 func button_style(color):
 	var style = StyleBoxFlat.new()
 	style.bg_color = color
-	style.corner_radius_top_left = 18
-	style.corner_radius_top_right = 18
-	style.corner_radius_bottom_left = 18
-	style.corner_radius_bottom_right = 18
+	style.corner_radius_top_left = 22
+	style.corner_radius_top_right = 22
+	style.corner_radius_bottom_left = 22
+	style.corner_radius_bottom_right = 22
 	style.border_width_left = 1
 	style.border_width_top = 1
 	style.border_width_right = 1
@@ -1078,6 +1083,10 @@ func reset_game():
 	lane_index = 1
 	last_lane_index = 1
 	run_cycle = 0.0
+	last_spawn_lane = 1
+	lane_change_flash_timer = 0.0
+	near_miss_timer = 0.0
+	combo_bonus = 0
 	screen_shake_timer = 0.0
 	feedback_timer = 0.0
 	if feedback_label:
@@ -1096,28 +1105,28 @@ func reset_game():
 	is_paused = false
 	game_over_panel.visible = false
 	restart_button.visible = false
-	pause_button.text = "Pause"
+	pause_button.text = "II"
 	player_root.position = Vector3(LANES[lane_index], BASE_Y, PLAYER_Z)
 	for i in range(9):
-		spawn_item(-24.0 - float(i) * 9.8)
+		spawn_item(-28.0 - float(i) * 11.5)
 	update_hud()
 
 func game_speed():
-	return 7.6 + float(config.get("speed", 3)) * 1.35 + float(config.get("difficulty", 2)) * 0.45 + min(distance_score / 850.0, 3.3)
+	return 7.0 + float(config.get("speed", 3)) * 1.15 + float(config.get("difficulty", 2)) * 0.34 + min(distance_score / 950.0, 3.0)
 
 func update_player(delta):
 	var target_x = LANES[lane_index]
 	var before_x = player_root.position.x
-	player_root.position.x = lerp(player_root.position.x, target_x, min(delta * 11.0, 1.0))
+	player_root.position.x = lerp(player_root.position.x, target_x, min(delta * 15.5, 1.0))
 	var lane_velocity = (player_root.position.x - before_x) / max(delta, 0.001)
 
 	if on_ground and slide_timer <= 0.0:
-		run_cycle += delta * game_speed() * 2.8
+		run_cycle += delta * game_speed() * 3.35
 	else:
 		run_cycle += delta * game_speed() * 1.25
 
 	if not on_ground:
-		vertical_velocity -= 18.0 * delta
+		vertical_velocity -= 21.5 * delta
 		player_y += vertical_velocity * delta
 		if player_y <= BASE_Y:
 			player_y = BASE_Y
@@ -1127,7 +1136,7 @@ func update_player(delta):
 
 	var run_bob = 0.0
 	if on_ground and slide_timer <= 0.0:
-		run_bob = abs(sin(run_cycle)) * 0.075
+		run_bob = abs(sin(run_cycle)) * 0.055
 	player_root.position.z = PLAYER_Z + sin(run_cycle * 0.55) * 0.035
 
 	if slide_timer > 0.0:
@@ -1138,9 +1147,9 @@ func update_player(delta):
 		player_body.scale.y = lerp(player_body.scale.y, 1.0, min(delta * 14.0, 1.0))
 		player_body.position.y = lerp(player_body.position.y, run_bob, min(delta * 14.0, 1.0))
 
-	var lane_lean = clamp(-lane_velocity * 5.0, -16.0, 16.0)
+	var lane_lean = clamp(-lane_velocity * 4.0, -13.0, 13.0)
 	player_body.rotation_degrees.z = lerp(player_body.rotation_degrees.z, lane_lean, min(delta * 8.0, 1.0))
-	player_body.rotation_degrees.y = sin(run_cycle * 0.8) * 3.5
+	player_body.rotation_degrees.y = sin(run_cycle * 0.9) * 2.4
 	player_body.rotation_degrees.x = lerp(player_body.rotation_degrees.x, -13.0 if slide_timer > 0.0 else 0.0, min(delta * 9.0, 1.0))
 	if player_head:
 		player_head.position.y = 0.96 + run_bob * 0.45
@@ -1174,6 +1183,8 @@ func update_powerups(delta):
 	magnet_timer = max(0.0, magnet_timer - delta)
 	double_timer = max(0.0, double_timer - delta)
 	feedback_timer = max(0.0, feedback_timer - delta)
+	lane_change_flash_timer = max(0.0, lane_change_flash_timer - delta)
+	near_miss_timer = max(0.0, near_miss_timer - delta)
 	if feedback_label and feedback_timer <= 0.0:
 		feedback_label.text = ""
 
@@ -1181,7 +1192,7 @@ func update_spawning(delta):
 	spawn_timer -= delta
 	if spawn_timer <= 0.0:
 		spawn_item(SPAWN_Z)
-		spawn_timer = max(0.45, randf_range(0.78, 1.22) - float(config.get("difficulty", 2)) * 0.04)
+		spawn_timer = max(0.58, randf_range(0.92, 1.35) - float(config.get("difficulty", 2)) * 0.035)
 
 func update_items(delta):
 	var move = game_speed() * delta
@@ -1197,7 +1208,7 @@ func update_items(delta):
 			item.node.position.x = lerp(item.node.position.x, player_root.position.x, min(delta * 4.5, 1.0))
 		if item.z > DESPAWN_Z:
 			remove_list.append(item)
-		elif abs(item.z - PLAYER_Z) < 1.05:
+		elif abs(item.z - PLAYER_Z) < collision_window_for(item.kind):
 			check_collision(item, remove_list)
 	for item in remove_list:
 		items.erase(item)
@@ -1218,24 +1229,26 @@ func update_world_motion(delta):
 				prop.position.z -= 135.0
 
 func update_camera(delta):
-	var speed_push = clamp((game_speed() - 9.0) * 0.040, 0.0, 0.40)
-	var bob = sin(run_cycle * 0.58) * 0.050
+	# Phase 5A.10: tighter runner camera, less empty sky, better forward-speed feel.
+	var speed_push = clamp((game_speed() - 8.8) * 0.055, 0.0, 0.55)
+	var bob = sin(run_cycle * 0.52) * 0.035
+	var lane_look = player_root.position.x * 0.18
 	var shake = Vector3.ZERO
 	if screen_shake_timer > 0.0:
 		screen_shake_timer = max(0.0, screen_shake_timer - delta)
-		shake = Vector3(randf_range(-0.10, 0.10), randf_range(-0.06, 0.06), 0) * (screen_shake_timer / 0.30)
-	var target_pos = Vector3(player_root.position.x * 0.18, 3.85 + bob, 8.15 - speed_push) + shake
-	camera.position = camera.position.lerp(target_pos, min(delta * 5.5, 1.0))
-	camera.fov = lerp(camera.fov, 78.0 + speed_push * 9.0, min(delta * 2.7, 1.0))
-	camera.look_at(Vector3(player_root.position.x * 0.08, 1.08 + bob, -18.0), Vector3.UP)
+		shake = Vector3(randf_range(-0.08, 0.08), randf_range(-0.045, 0.045), 0) * (screen_shake_timer / 0.30)
+	var target_pos = Vector3(player_root.position.x * 0.26, 3.35 + bob, 7.20 - speed_push) + shake
+	camera.position = camera.position.lerp(target_pos, min(delta * 6.8, 1.0))
+	camera.fov = lerp(camera.fov, camera_base_fov + speed_push * 7.0, min(delta * 3.2, 1.0))
+	camera.look_at(Vector3(lane_look, 1.38 + bob, -15.8), Vector3.UP)
 
 func update_hud():
 	var score = int(distance_score)
-	hud_label.text = "%s\nScore: %d   Best: %d   Coins: %d\nLane: %d   Speed: %s   Difficulty: %s" % [str(config.get("gameName", "3D Runner")), score, best_score, coins, lane_index + 1, str(config.get("speed", 3)), str(config.get("difficulty", 2))]
+	var speed_display = "%.1f" % game_speed()
+	hud_label.text = "%s  •  Score %d  •  Best %d  •  Coins %d\nLane %d   Speed %s   Difficulty %s" % [str(config.get("gameName", "3D Runner")), score, best_score, coins, lane_index + 1, speed_display, str(config.get("difficulty", 2))]
 	if asset_mode == "locked_character_loaded":
-		hud_label.text += "\n" + asset_debug_text
-		if imported_animation_status != "":
-			hud_label.text += "\n" + imported_animation_status
+		var anim_short = imported_animation_status.replace("Animation: ", "Anim: ")
+		hud_label.text += "\n" + asset_debug_text + ("  •  " + anim_short if imported_animation_status != "" else "")
 	elif asset_mode == "locked_character_pack":
 		hud_label.text += "\nAssets: Locked pack found • " + asset_debug_text
 	elif asset_mode == "gamebox_starter_pack":
@@ -1249,16 +1262,26 @@ func update_hud():
 		buffs.append("Magnet %ds" % int(ceil(magnet_timer)))
 	if double_timer > 0.0:
 		buffs.append("2x Coins %ds" % int(ceil(double_timer)))
+	if near_miss_timer > 0.0:
+		buffs.append("Near miss!")
 	if buffs.size() > 0:
 		hud_label.text += "\n" + "  •  ".join(buffs)
 
 func spawn_item(z):
+	# Phase 5A.10: fair lane selection and more readable obstacle/coin rhythm.
 	var lane = randi_range(0, 2)
+	if randf() < 0.62:
+		# Avoid repeatedly blocking the same lane; this makes lane changes feel intentional.
+		var choices = [0, 1, 2]
+		choices.erase(last_spawn_lane)
+		lane = choices.pick_random()
+	last_spawn_lane = lane
+
 	var roll = randf()
 	var kind = "block"
-	if bool(config.get("coinsEnabled", true)) and roll < 0.30:
+	if bool(config.get("coinsEnabled", true)) and roll < 0.28:
 		kind = "coin"
-	elif bool(config.get("powerupsEnabled", true)) and roll < 0.39:
+	elif bool(config.get("powerupsEnabled", true)) and roll < 0.36:
 		kind = "powerup"
 	else:
 		var pack = str(config.get("obstaclePack", "mixed_starter_pack")).to_lower()
@@ -1273,7 +1296,10 @@ func spawn_item(z):
 	var node = create_item_node(kind)
 	node.position = Vector3(LANES[lane], item_height(kind), z)
 	if kind != "coin" and kind != "powerup":
-		add_box("ItemShadow", Vector3(0, -item_height(kind) + 0.08, 0.14), Vector3(0.48, 0.022, 0.34), mats["shadow"], node)
+		add_box("ItemShadow", Vector3(0, -item_height(kind) + 0.08, 0.14), Vector3(0.52, 0.022, 0.38), mats["shadow"], node)
+	else:
+		# Tiny lane glow below collectibles makes them easier to read at speed.
+		add_box("CollectibleMarker", Vector3(0, -item_height(kind) + 0.10, 0), Vector3(0.20, 0.018, 0.20), mats["lane_glow"], node)
 	item_root.add_child(node)
 	items.append({"node": node, "lane": lane, "z": z, "kind": kind})
 
@@ -1330,26 +1356,43 @@ func create_item_node(kind):
 			add_box("CrateBandV", Vector3(0.18, 0.02, -0.32), Vector3(0.055, 0.58, 0.025), mats["box_band"], root)
 	return root
 
+func collision_window_for(kind):
+	match kind:
+		"coin": return 1.18
+		"powerup": return 1.18
+		"gate": return 0.92
+		"barrier": return 0.88
+		"cone": return 0.78
+		_: return 0.86
+
 func check_collision(item, remove_list):
+	var x_gap = abs(item.node.position.x - player_root.position.x)
+	var z_gap = abs(item.z - PLAYER_Z)
 	if item.kind == "coin" or item.kind == "powerup":
-		if abs(item.node.position.x - player_root.position.x) < 0.78:
+		if x_gap < 0.92 and z_gap < 1.12:
 			collect_item(item)
 			remove_list.append(item)
 		return
-	if int(item.lane) != lane_index:
+	# Use real player x gap too, not only lane index. This prevents unfair deaths mid-lane-change.
+	if x_gap > 0.64:
+		if z_gap < 0.48 and x_gap < 1.10:
+			near_miss_timer = 0.55
+		return
+	if z_gap > collision_window_for(item.kind):
 		return
 	var passed = false
 	if item.kind == "gate" and slide_timer > 0.0:
 		passed = true
-	if (item.kind == "block" or item.kind == "cone" or item.kind == "barrier") and player_root.position.y > 1.35:
+	if (item.kind == "block" or item.kind == "cone" or item.kind == "barrier") and player_root.position.y > 1.28:
 		passed = true
-	if item.kind == "ramp" and player_root.position.y > 1.0:
+	if item.kind == "ramp" and player_root.position.y > 0.95:
 		passed = true
 	if passed:
 		return
 	if shield_timer > 0.0:
 		shield_timer = 0.0
 		remove_list.append(item)
+		show_feedback("Shield broke")
 		return
 	end_game()
 
@@ -1357,7 +1400,8 @@ func collect_item(item):
 	if item.kind == "coin":
 		var gain = 2 if double_timer > 0.0 else 1
 		coins += gain
-		distance_score += 30
+		combo_bonus += 1
+		distance_score += 30 + min(combo_bonus, 8) * 2
 		show_feedback("+%d coin" % gain)
 	elif item.kind == "powerup":
 		var p = randi_range(0, 2)
@@ -1380,6 +1424,7 @@ func show_feedback(text):
 func end_game():
 	screen_shake_timer = 0.30
 	is_game_over = true
+	combo_bonus = 0
 	var final_score = int(distance_score)
 	if final_score > best_score:
 		best_score = final_score
@@ -1393,30 +1438,34 @@ func toggle_pause():
 	if is_game_over:
 		return
 	is_paused = not is_paused
-	pause_button.text = "Play" if is_paused else "Pause"
+	pause_button.text = "▶" if is_paused else "II"
 	game_over_panel.visible = is_paused
 	game_over_label.text = "Paused" if is_paused else ""
 
 func lane_left():
 	if not is_game_over and not is_paused:
 		lane_index = max(0, lane_index - 1)
+		lane_change_flash_timer = 0.18
 
 func lane_right():
 	if not is_game_over and not is_paused:
 		lane_index = min(2, lane_index + 1)
+		lane_change_flash_timer = 0.18
 
 func jump():
 	if is_game_over or is_paused:
 		return
 	if on_ground:
 		on_ground = false
-		vertical_velocity = 8.7
+		vertical_velocity = 9.45
+		show_feedback("Jump")
 
 func slide():
 	if is_game_over or is_paused:
 		return
 	if on_ground:
-		slide_timer = 0.85
+		slide_timer = 0.72
+		show_feedback("Slide")
 
 func _unhandled_input(event):
 	if event.is_action_pressed("lane_left"):

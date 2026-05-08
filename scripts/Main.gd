@@ -1,10 +1,10 @@
 extends Node3D
 
 # GameBox 3D Runner - Android-safe real 3D prototype.
-# Phase 5A.15.1: Smooth fixed-camera lane framing reset. Code patch only.
+# Phase 5A.15.2: Final side-lane visibility fix. Code patch only.
 
-const LANES = [-1.06, 0.0, 1.06]
-const PLAYER_Z = 3.2
+const LANES = [-0.82, 0.0, 0.82]
+const PLAYER_Z = 2.55
 const SPAWN_Z = -92.0
 const DESPAWN_Z = 9.5
 const BASE_Y = 0.64
@@ -90,7 +90,7 @@ var last_spawn_lane = 1
 var lane_change_flash_timer = 0.0
 var combo_bonus = 0
 var near_miss_timer = 0.0
-var camera_base_fov = 68.0
+var camera_base_fov = 72.0
 var camera_lane_x = 0.0
 
 func _ready():
@@ -259,7 +259,7 @@ func create_locked_character_instance():
 		if node != null:
 			node.name = "LockedCharacterModel"
 			node.rotation_degrees.y += 180.0
-			fit_visual_model_to_height(node, 1.62, -0.52)
+			fit_visual_model_to_height(node, 1.48, -0.48)
 			prepare_imported_character_visual(node)
 			asset_mode = "locked_character_loaded"
 			asset_debug_text = "Character: " + path.get_file()
@@ -672,7 +672,7 @@ func instantiate_asset_model(key, parent, pos := Vector3.ZERO, scale_value := Ve
 	if key == "character":
 		# Quaternius outfits face direction/scale can vary; normalize after import.
 		node.rotation_degrees.y += 180.0
-		fit_visual_model_to_height(node, 1.52, -0.50)
+		fit_visual_model_to_height(node, 1.48, -0.48)
 		print("GameBox character model loaded: ", path)
 	return node
 
@@ -1108,8 +1108,8 @@ func update_hard_slide_visual(delta):
 func create_camera():
 	camera = Camera3D.new()
 	camera.name = "Camera"
-	camera.position = Vector3(0, 3.08, 6.72)
-	camera.look_at(Vector3(0, 1.02, -12.4), Vector3.UP)
+	camera.position = Vector3(0, 3.16, 7.38)
+	camera.look_at(Vector3(0, 1.00, -12.6), Vector3.UP)
 	camera.fov = camera_base_fov
 	camera.current = true
 	add_child(camera)
@@ -1125,9 +1125,9 @@ func create_game_ui():
 	hud_label = Label.new()
 	hud_label.anchor_left = 0.04
 	hud_label.anchor_right = 0.96
-	hud_label.anchor_top = 0.055
-	hud_label.anchor_bottom = 0.150
-	hud_label.add_theme_font_size_override("font_size", 13)
+	hud_label.anchor_top = 0.070
+	hud_label.anchor_bottom = 0.165
+	hud_label.add_theme_font_size_override("font_size", 12)
 	hud_label.add_theme_color_override("font_color", Color(0.94, 0.92, 1.0))
 	root.add_child(hud_label)
 
@@ -1251,7 +1251,7 @@ func game_speed():
 func update_player(delta):
 	var target_x = LANES[lane_index]
 	var before_x = player_root.position.x
-	player_root.position.x = lerp(player_root.position.x, target_x, min(delta * 9.4, 1.0))
+	player_root.position.x = lerp(player_root.position.x, target_x, min(delta * 8.1, 1.0))
 	var lane_velocity = (player_root.position.x - before_x) / max(delta, 0.001)
 
 	if on_ground and slide_timer <= 0.0:
@@ -1293,7 +1293,7 @@ func update_player(delta):
 		player_body.position.y = lerp(player_body.position.y, run_bob, min(delta * 14.0, 1.0))
 	update_hard_slide_visual(delta)
 
-	var lane_lean = clamp(-lane_velocity * 4.0, -13.0, 13.0)
+	var lane_lean = clamp(-lane_velocity * 3.1, -9.0, 9.0)
 	player_body.rotation_degrees.z = lerp(player_body.rotation_degrees.z, lane_lean, min(delta * 8.0, 1.0))
 	player_body.rotation_degrees.y = sin(run_cycle * 0.9) * 2.4
 	var slide_root_pitch = 0.0
@@ -1385,22 +1385,22 @@ func update_world_motion(delta):
 				prop.position.z -= 135.0
 
 func update_camera(delta):
-	# Phase 5A.15.1: start-again camera reset.
-	# Do NOT follow the player's X/lane position. The previous lane-aware camera made the
-	# whole temple/world appear to slide left/right. Instead, keep the camera locked on
-	# center, make lanes slightly tighter, and use a wider FOV so all lanes stay visible.
-	var speed_push = clamp((game_speed() - 8.8) * 0.028, 0.0, 0.26)
-	var bob = sin(run_cycle * 0.52) * 0.014
+	# Phase 5A.15.2: final side-lane visibility fix.
+	# Keep camera X locked so the world does not feel like it is sliding left/right.
+	# Visibility is solved by tighter lane spacing, a slightly smaller character, and
+	# a slightly wider/back camera. This keeps all three lanes visible without moving
+	# the environment under the player.
+	var speed_push = clamp((game_speed() - 8.8) * 0.022, 0.0, 0.22)
+	var bob = sin(run_cycle * 0.50) * 0.010
 	var shake = Vector3.ZERO
 	if screen_shake_timer > 0.0:
 		screen_shake_timer = max(0.0, screen_shake_timer - delta)
-		shake = Vector3(randf_range(-0.035, 0.035), randf_range(-0.020, 0.020), 0) * (screen_shake_timer / 0.30)
+		shake = Vector3(randf_range(-0.028, 0.028), randf_range(-0.016, 0.016), 0) * (screen_shake_timer / 0.30)
 
-	# Fixed X keeps the environment stable. Player moves between lanes, not the camera/world.
-	var target_pos = Vector3(0.0, 3.06 + bob, 6.62 - speed_push) + shake
-	camera.position = camera.position.lerp(target_pos, min(delta * 5.2, 1.0))
-	camera.fov = lerp(camera.fov, camera_base_fov + speed_push * 1.6, min(delta * 2.8, 1.0))
-	camera.look_at(Vector3(0.0, 1.02 + bob, -12.1), Vector3.UP)
+	var target_pos = Vector3(0.0, 3.16 + bob, 7.38 - speed_push) + shake
+	camera.position = camera.position.lerp(target_pos, min(delta * 4.8, 1.0))
+	camera.fov = lerp(camera.fov, camera_base_fov + speed_push * 1.2, min(delta * 2.5, 1.0))
+	camera.look_at(Vector3(0.0, 1.00 + bob, -12.6), Vector3.UP)
 
 func update_hud():
 	var score = int(distance_score)

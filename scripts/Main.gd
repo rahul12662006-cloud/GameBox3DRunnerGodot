@@ -1,10 +1,10 @@
 extends Node3D
 
 # GameBox 3D Runner - Android-safe real 3D prototype.
-# Phase 5A.15.2: Final side-lane visibility fix. Code patch only.
+# Phase 5A.15.3: Restore true lane spacing and stabilize asset framing. Code patch only.
 
-const LANES = [-0.82, 0.0, 0.82]
-const PLAYER_Z = 2.55
+const LANES = [-1.12, 0.0, 1.12]
+const PLAYER_Z = 2.82
 const SPAWN_Z = -92.0
 const DESPAWN_Z = 9.5
 const BASE_Y = 0.64
@@ -90,7 +90,7 @@ var last_spawn_lane = 1
 var lane_change_flash_timer = 0.0
 var combo_bonus = 0
 var near_miss_timer = 0.0
-var camera_base_fov = 72.0
+var camera_base_fov = 74.0
 var camera_lane_x = 0.0
 
 func _ready():
@@ -857,34 +857,34 @@ func create_road():
 	road_dash_nodes.clear()
 	# Phase 5A.13: wider readable temple track with stone borders and cracks.
 	add_box("TempleGround", Vector3(0, -0.14, -38), Vector3(18.0, 0.060, 86.0), mats["temple_stone_dark"], world_root)
-	add_box("LeftSandPath", Vector3(-4.35, -0.060, -38), Vector3(1.70, 0.070, 76.0), mats["temple_sand"], world_root)
-	add_box("RightSandPath", Vector3(4.35, -0.060, -38), Vector3(1.70, 0.070, 76.0), mats["temple_sand"], world_root)
+	add_box("LeftSandPath", Vector3(-4.78, -0.060, -38), Vector3(1.55, 0.070, 76.0), mats["temple_sand"], world_root)
+	add_box("RightSandPath", Vector3(4.78, -0.060, -38), Vector3(1.55, 0.070, 76.0), mats["temple_sand"], world_root)
 
 	for i in range(22):
 		var z = -94.0 + float(i) * 4.75
 		var mat = mats["road_panel"] if i % 2 == 0 else mats["road"]
-		var w = 5.55 + randf_range(-0.06, 0.06)
+		var w = 6.15 + randf_range(-0.05, 0.05)
 		var plate = add_box("StoneRoadTile", Vector3(0, 0, z), Vector3(w, 0.095, 4.52), mat, world_root)
 		road_dash_nodes.append(plate)
 		# small brick seams and cracks make the road feel like ancient stone instead of flat asphalt.
 		for c in range(3):
-			var crack = add_box("TileCrack", Vector3(randf_range(-2.25, 2.25), 0.093, z + randf_range(-1.85, 1.85)), Vector3(randf_range(0.34, 0.92), 0.018, 0.035), mats["temple_stone_dark"], world_root)
+			var crack = add_box("TileCrack", Vector3(randf_range(-2.58, 2.58), 0.093, z + randf_range(-1.85, 1.85)), Vector3(randf_range(0.34, 0.92), 0.018, 0.035), mats["temple_stone_dark"], world_root)
 			crack.rotation_degrees.y = randf_range(-8.0, 8.0)
 			road_dash_nodes.append(crack)
 		var seam = add_box("StoneSeam", Vector3(0, 0.085, z + 2.25), Vector3(w * 0.98, 0.020, 0.050), mats["temple_stone_dark"], world_root)
 		road_dash_nodes.append(seam)
 
 	# Raised side borders instead of modern rails.
-	for side_x in [-3.08, 3.08]:
+	for side_x in [-3.28, 3.28]:
 		add_box("StoneCurb", Vector3(side_x, 0.105, -38), Vector3(0.22, 0.155, 66.0), mats["stone_edge"], world_root)
 		add_box("GoldRuneRail", Vector3(side_x * 0.98, 0.240, -38), Vector3(0.055, 0.055, 66.0), mats["road_side"], world_root)
 
-	for x in [-0.83, 0.83]:
+	for x in [-0.56, 0.56]:
 		add_box("RuneLaneLine", Vector3(x, 0.150, -38), Vector3(0.025, 0.036, 66.0), mats["lane"], world_root)
 	for z in range(-90, 10, 3):
 		var dash = add_box("RuneDash", Vector3(0, 0.205, float(z)), Vector3(0.13, 0.045, 0.38), mats["lane_glow"], world_root)
 		road_dash_nodes.append(dash)
-	for side_x in [-2.30, 2.30]:
+	for side_x in [-2.58, 2.58]:
 		for z in range(-90, 10, 5):
 			var side_dash = add_box("SideRune", Vector3(side_x, 0.205, float(z)), Vector3(0.080, 0.040, 0.56), mats["road_side"], world_root)
 			road_dash_nodes.append(side_dash)
@@ -895,8 +895,8 @@ func create_environment_props():
 	# Keep the middle track readable, but fill the empty upper view with arches and banners.
 	for i in range(46):
 		var z = -100.0 + float(i) * 3.45
-		var left_x = -4.70 - randf() * 0.72
-		var right_x = 4.70 + randf() * 0.72
+		var left_x = -5.35 - randf() * 0.95
+		var right_x = 5.35 + randf() * 0.95
 		if i % 4 == 0:
 			create_temple_arch_pair(z)
 			create_hanging_banner(z + 0.55)
@@ -907,14 +907,14 @@ func create_environment_props():
 			create_temple_pillar(left_x, z)
 			create_temple_pillar(right_x, z + 1.55)
 		else:
-			create_low_side_steps(-3.86, z)
-			create_low_side_steps(3.86, z + 1.45)
+			create_low_side_steps(-4.32, z)
+			create_low_side_steps(4.32, z + 1.45)
 		if i % 2 == 0:
-			create_torch(-3.72, z + 0.75)
-			create_torch(3.72, z + 2.10)
+			create_torch(-4.05, z + 0.75)
+			create_torch(4.05, z + 2.10)
 		if i % 7 == 0:
-			create_mossy_rock(-4.10, z + 1.2)
-			create_mossy_rock(4.10, z + 2.6)
+			create_mossy_rock(-4.82, z + 1.2)
+			create_mossy_rock(4.82, z + 2.6)
 
 
 func create_low_side_steps(x, z):
@@ -927,7 +927,7 @@ func create_low_side_steps(x, z):
 
 func create_hanging_banner(z):
 	var group = create_prop_group("TempleBanner", 0.0, z)
-	add_box("BannerBeam", Vector3(0, 3.25, 0), Vector3(4.95, 0.10, 0.12), mats["wood"], group)
+	add_box("BannerBeam", Vector3(0, 3.35, 0), Vector3(4.20, 0.09, 0.10), mats["wood"], group)
 	var left = add_box("BannerL", Vector3(-1.15, 2.78, 0.02), Vector3(0.42, 0.78, 0.035), mats["banner"], group)
 	var right = add_box("BannerR", Vector3(1.15, 2.78, 0.02), Vector3(0.42, 0.78, 0.035), mats["banner"], group)
 	add_box("BannerGoldL", Vector3(-1.15, 2.40, 0.055), Vector3(0.34, 0.060, 0.020), mats["banner_gold"], group)
@@ -955,14 +955,14 @@ func create_ruin_wall(x, z):
 		add_box("GoldenRune", Vector3(0, h * 0.55, -0.30), Vector3(0.10, 0.36, 0.030), mats["road_side"], group)
 
 func create_temple_arch_pair(z):
-	create_temple_arch(-4.85, z, -1.0)
-	create_temple_arch(4.85, z + 1.9, 1.0)
+	create_temple_arch(-5.72, z, -1.0)
+	create_temple_arch(5.72, z + 1.9, 1.0)
 
 func create_temple_arch(x, z, side):
 	var group = create_prop_group("TempleArch", x, z)
 	add_cylinder("ArchPillarA", Vector3(-0.33 * side, 1.05, 0), 0.16, 2.1, mats["temple_stone"], group)
 	add_cylinder("ArchPillarB", Vector3(0.33 * side, 1.05, 0), 0.16, 2.1, mats["temple_stone"], group)
-	add_box("ArchTop", Vector3(0, 2.16, 0), Vector3(0.92, 0.22, 0.42), mats["temple_stone_dark"], group)
+	add_box("ArchTop", Vector3(0, 2.16, 0), Vector3(0.72, 0.18, 0.34), mats["temple_stone_dark"], group)
 	add_box("ArchRune", Vector3(0, 2.31, -0.23), Vector3(0.36, 0.045, 0.025), mats["road_side"], group)
 
 func create_torch(x, z):
@@ -1108,8 +1108,8 @@ func update_hard_slide_visual(delta):
 func create_camera():
 	camera = Camera3D.new()
 	camera.name = "Camera"
-	camera.position = Vector3(0, 3.16, 7.38)
-	camera.look_at(Vector3(0, 1.00, -12.6), Vector3.UP)
+	camera.position = Vector3(0, 3.24, 7.95)
+	camera.look_at(Vector3(0, 1.05, -13.2), Vector3.UP)
 	camera.fov = camera_base_fov
 	camera.current = true
 	add_child(camera)
@@ -1381,15 +1381,14 @@ func update_world_motion(delta):
 	for prop in env_motion_nodes:
 		if is_instance_valid(prop):
 			prop.position.z += move * 0.78
-			if prop.position.z > 10.0:
+			if prop.position.z > -2.0:
 				prop.position.z -= 135.0
 
 func update_camera(delta):
-	# Phase 5A.15.2: final side-lane visibility fix.
-	# Keep camera X locked so the world does not feel like it is sliding left/right.
-	# Visibility is solved by tighter lane spacing, a slightly smaller character, and
-	# a slightly wider/back camera. This keeps all three lanes visible without moving
-	# the environment under the player.
+	# Phase 5A.15.3: true lane spacing with stable camera.
+	# Previous patch made lanes too tight, so the player did not visually reach proper
+	# left/right lanes and obstacles looked misaligned. Keep camera X locked, restore
+	# real lane spacing, and use wider/back framing instead of moving the world.
 	var speed_push = clamp((game_speed() - 8.8) * 0.022, 0.0, 0.22)
 	var bob = sin(run_cycle * 0.50) * 0.010
 	var shake = Vector3.ZERO
@@ -1397,10 +1396,10 @@ func update_camera(delta):
 		screen_shake_timer = max(0.0, screen_shake_timer - delta)
 		shake = Vector3(randf_range(-0.028, 0.028), randf_range(-0.016, 0.016), 0) * (screen_shake_timer / 0.30)
 
-	var target_pos = Vector3(0.0, 3.16 + bob, 7.38 - speed_push) + shake
+	var target_pos = Vector3(0.0, 3.24 + bob, 7.95 - speed_push) + shake
 	camera.position = camera.position.lerp(target_pos, min(delta * 4.8, 1.0))
 	camera.fov = lerp(camera.fov, camera_base_fov + speed_push * 1.2, min(delta * 2.5, 1.0))
-	camera.look_at(Vector3(0.0, 1.00 + bob, -12.6), Vector3.UP)
+	camera.look_at(Vector3(0.0, 1.05 + bob, -13.2), Vector3.UP)
 
 func update_hud():
 	var score = int(distance_score)

@@ -1,9 +1,9 @@
 extends Node3D
 
 # GameBox 3D Runner - Android-safe real 3D prototype.
-# Phase 5A.15: Camera lane framing + player visibility fix. Code patch only.
+# Phase 5A.15.1: Smooth fixed-camera lane framing reset. Code patch only.
 
-const LANES = [-1.42, 0.0, 1.42]
+const LANES = [-1.06, 0.0, 1.06]
 const PLAYER_Z = 3.2
 const SPAWN_Z = -92.0
 const DESPAWN_Z = 9.5
@@ -90,7 +90,7 @@ var last_spawn_lane = 1
 var lane_change_flash_timer = 0.0
 var combo_bonus = 0
 var near_miss_timer = 0.0
-var camera_base_fov = 66.0
+var camera_base_fov = 68.0
 var camera_lane_x = 0.0
 
 func _ready():
@@ -1108,8 +1108,8 @@ func update_hard_slide_visual(delta):
 func create_camera():
 	camera = Camera3D.new()
 	camera.name = "Camera"
-	camera.position = Vector3(0, 3.10, 6.50)
-	camera.look_at(Vector3(0, 0.95, -12), Vector3.UP)
+	camera.position = Vector3(0, 3.08, 6.72)
+	camera.look_at(Vector3(0, 1.02, -12.4), Vector3.UP)
 	camera.fov = camera_base_fov
 	camera.current = true
 	add_child(camera)
@@ -1251,7 +1251,7 @@ func game_speed():
 func update_player(delta):
 	var target_x = LANES[lane_index]
 	var before_x = player_root.position.x
-	player_root.position.x = lerp(player_root.position.x, target_x, min(delta * 15.5, 1.0))
+	player_root.position.x = lerp(player_root.position.x, target_x, min(delta * 9.4, 1.0))
 	var lane_velocity = (player_root.position.x - before_x) / max(delta, 0.001)
 
 	if on_ground and slide_timer <= 0.0:
@@ -1385,26 +1385,22 @@ func update_world_motion(delta):
 				prop.position.z -= 135.0
 
 func update_camera(delta):
-	# Phase 5A.15: lane-aware camera framing.
-	# The old camera stayed too centered, so the real character could drift out of view
-	# when switching to the far-left/far-right lane. This keeps all 3 lanes visible while
-	# gently following the player enough to keep the character on screen.
-	var speed_push = clamp((game_speed() - 8.8) * 0.035, 0.0, 0.34)
-	var bob = sin(run_cycle * 0.52) * 0.018
-	camera_lane_x = lerp(camera_lane_x, player_root.position.x, min(delta * 5.8, 1.0))
-	var camera_follow_x = clamp(camera_lane_x * 0.66, -0.98, 0.98)
-	var look_x = clamp(camera_lane_x * 0.48, -0.78, 0.78)
+	# Phase 5A.15.1: start-again camera reset.
+	# Do NOT follow the player's X/lane position. The previous lane-aware camera made the
+	# whole temple/world appear to slide left/right. Instead, keep the camera locked on
+	# center, make lanes slightly tighter, and use a wider FOV so all lanes stay visible.
+	var speed_push = clamp((game_speed() - 8.8) * 0.028, 0.0, 0.26)
+	var bob = sin(run_cycle * 0.52) * 0.014
 	var shake = Vector3.ZERO
 	if screen_shake_timer > 0.0:
 		screen_shake_timer = max(0.0, screen_shake_timer - delta)
-		shake = Vector3(randf_range(-0.045, 0.045), randf_range(-0.026, 0.026), 0) * (screen_shake_timer / 0.30)
+		shake = Vector3(randf_range(-0.035, 0.035), randf_range(-0.020, 0.020), 0) * (screen_shake_timer / 0.30)
 
-	# A slightly wider FOV plus camera X-follow prevents the character from disappearing
-	# behind the screen edge/bottom controls in side lanes.
-	var target_pos = Vector3(camera_follow_x, 3.02 + bob, 6.42 - speed_push) + shake
-	camera.position = camera.position.lerp(target_pos, min(delta * 7.2, 1.0))
-	camera.fov = lerp(camera.fov, camera_base_fov + speed_push * 2.4, min(delta * 3.4, 1.0))
-	camera.look_at(Vector3(look_x, 1.02 + bob, -11.4), Vector3.UP)
+	# Fixed X keeps the environment stable. Player moves between lanes, not the camera/world.
+	var target_pos = Vector3(0.0, 3.06 + bob, 6.62 - speed_push) + shake
+	camera.position = camera.position.lerp(target_pos, min(delta * 5.2, 1.0))
+	camera.fov = lerp(camera.fov, camera_base_fov + speed_push * 1.6, min(delta * 2.8, 1.0))
+	camera.look_at(Vector3(0.0, 1.02 + bob, -12.1), Vector3.UP)
 
 func update_hud():
 	var score = int(distance_score)
